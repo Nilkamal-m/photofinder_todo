@@ -1,0 +1,24 @@
+# Dependencies and package-manager caches
+node_modules/
+.npm/
+.npm-cache/
+
+# Environment files and local credentials
+.env
+.env.*
+!.env.example
+atlas-credentials.env
+
+# Expo and generated frontend output
+.expo/
+dist/
+web-build/
+
+# Logs and local OS files
+*.log
+.DS_Store
+
+# Local editor and test artifacts
+.vscode/*
+!.vscode/settings.json
+coverage/
