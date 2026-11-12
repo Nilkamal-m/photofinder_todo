@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "PhotoFinder Billing",
+    "slug": "photofinder-billing",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "web": {
+      "bundler": "metro",
+      "output": "single"
+    },
+    "platforms": ["ios", "android", "web"]
+  }
+}
+
