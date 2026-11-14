@@ -31,6 +31,7 @@ const packageRoutes = require('./routes/packages');
 const clientRoutes = require('./routes/clients');
 const billRoutes = require('./routes/bills');
 const dateRoutes = require('./routes/dates');
+const enquiryRoutes = require('./routes/enquiries');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/prices', priceRoutes);
@@ -39,6 +40,7 @@ app.use('/api/clients', clientRoutes);
 app.use('/api/bills', billRoutes);
 app.use('/api/dates', dateRoutes);
 app.use('/api/team', require('./routes/team'));
+app.use('/api/enquiries', enquiryRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

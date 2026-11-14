@@ -1,9 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   TextInput, ActivityIndicator,
 } from 'react-native';
 import api from '../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 import { totals, serviceCost } from '../utils/pricing';
 import { useAuth } from '../context/AuthContext';
 import { notify } from '../utils/dialog';
@@ -24,7 +26,7 @@ export default function EstimationScreen({ navigation }) {
   const [discountType, setDiscountType] = useState('amount'); // 'amount' (₹) or 'percent' (%)
   const [discountValue, setDiscountValue] = useState('0');
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     (async () => {
       try {
         setLoading(true);
@@ -36,7 +38,7 @@ export default function EstimationScreen({ navigation }) {
         setLoading(false);
       }
     })();
-  }, []);
+  }, []));
 
   const handleQtyChange = (id, delta) => {
     const current = quantities[id] || 0;
@@ -107,6 +109,7 @@ export default function EstimationScreen({ navigation }) {
     }));
 
     navigation.navigate('CreateBill', {
+      initialDiscount: computedDiscount,
       packageData: {
         items: billItems,
       },
@@ -131,14 +134,14 @@ export default function EstimationScreen({ navigation }) {
     <View style={styles.container}>
       {/* Top Bar with Back Button */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
         <View style={{ flex: 1, alignItems: 'center' }}>
-          <Text style={styles.heading}>Estimation Calculator</Text>
-          <Text style={styles.subheading}>Interactive pricing, discount simulation & margins</Text>
+          <Text style={styles.heading}>Estimates</Text>
+          <Text style={styles.subheading}>Services, pricing and totals</Text>
         </View>
-        <TouchableOpacity style={styles.resetBtn} onPress={handleReset}>
+        <TouchableOpacity accessibilityRole="button" style={styles.resetBtn} onPress={handleReset}>
           <Text style={styles.resetBtnText}>Reset</Text>
         </TouchableOpacity>
       </View>
@@ -175,7 +178,7 @@ export default function EstimationScreen({ navigation }) {
 
                     {/* Quantity Controls */}
                     <View style={styles.qtyControls}>
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button"
                         style={[styles.qtyBtn, qty === 0 && styles.qtyBtnDisabled]}
                         onPress={() => handleQtyChange(pi._id, -1)}
                         disabled={qty === 0}
@@ -183,14 +186,14 @@ export default function EstimationScreen({ navigation }) {
                         <Text style={styles.qtyBtnText}>-</Text>
                       </TouchableOpacity>
 
-                      <TextInput
+                      <TextInput accessibilityLabel="-"
                         style={styles.qtyInput}
                         value={String(qty)}
                         onChangeText={(v) => setDirectQty(pi._id, v)}
                         keyboardType="numeric"
                       />
 
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button"
                         style={styles.qtyBtn}
                         onPress={() => handleQtyChange(pi._id, 1)}
                       >
@@ -209,11 +212,11 @@ export default function EstimationScreen({ navigation }) {
 
             {/* Discount Control Card */}
             <View style={styles.card}>
-              <Text style={styles.cardHeader}>DISCOUNT SIMULATOR</Text>
+              <Text style={styles.cardHeader}>DISCOUNT</Text>
 
               {/* Toggle Flat ₹ vs % */}
               <View style={styles.discountToggleRow}>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={[styles.toggleBtn, discountType === 'amount' && styles.toggleBtnActive]}
                   onPress={() => setDiscountType('amount')}
                 >
@@ -221,7 +224,7 @@ export default function EstimationScreen({ navigation }) {
                     Flat ₹ Discount
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={[styles.toggleBtn, discountType === 'percent' && styles.toggleBtnActive]}
                   onPress={() => setDiscountType('percent')}
                 >
@@ -246,7 +249,7 @@ export default function EstimationScreen({ navigation }) {
               <View style={styles.quickChipsRow}>
                 {discountType === 'percent'
                   ? ['5%', '10%', '15%', '20%'].map((chip) => (
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button"
                         key={chip}
                         style={styles.quickChip}
                         onPress={() => setDiscountValue(chip.replace('%', ''))}
@@ -255,7 +258,7 @@ export default function EstimationScreen({ navigation }) {
                       </TouchableOpacity>
                     ))
                   : [500, 1000, 2000, 5000].map((amt) => (
-                      <TouchableOpacity
+                      <TouchableOpacity accessibilityRole="button"
                         key={amt}
                         style={styles.quickChip}
                         onPress={() => setDiscountValue(String(amt))}
@@ -268,15 +271,15 @@ export default function EstimationScreen({ navigation }) {
               {/* Admin Discount Safety Advisor */}
               {isAdmin && subtotal > 0 && (
                 <View style={styles.safetyBox}>
-                  <Text style={styles.safetyTitle}>Safe Discount Guidance [Admin]</Text>
+                  <Text style={styles.safetyTitle}>Discount limits</Text>
                   <Text style={styles.safetyRow}>
-                    • Max Breakeven Discount:{' '}
-                    <Text style={{ fontWeight: 'bold' }}>₹{maxBreakevenDiscount.toFixed(0)}</Text>
+                    • Break-even discount:{' '}
+                    <Text style={{ fontWeight: 'bold' }}>₹{maxBreakevenDiscount.toFixed(2)}</Text>
                   </Text>
                   <Text style={styles.safetyRow}>
-                    • Recommended Max (Leaves 20% margin):{' '}
+                    • For a 20% margin:{' '}
                     <Text style={{ fontWeight: 'bold', color: COLORS.success }}>
-                      ₹{recommendedMaxDiscount.toFixed(0)}
+                      ₹{recommendedMaxDiscount.toFixed(2)}
                     </Text>
                   </Text>
                 </View>
@@ -285,43 +288,43 @@ export default function EstimationScreen({ navigation }) {
 
             {/* Live Estimation Output Card */}
             <View style={styles.summaryCard}>
-              <Text style={styles.cardHeader}>LIVE ESTIMATION SUMMARY</Text>
+              <Text style={styles.cardHeader}>ESTIMATE</Text>
 
               <View style={styles.sumLine}>
-                <Text style={styles.sumLabel}>Standard Subtotal:</Text>
+                <Text style={styles.sumLabel}>Subtotal</Text>
                 <Text style={styles.sumVal}>₹{subtotal}</Text>
               </View>
 
               <View style={styles.sumLine}>
-                <Text style={styles.sumLabel}>Applied Discount:</Text>
+                <Text style={styles.sumLabel}>Discount</Text>
                 <Text style={[styles.sumVal, { color: COLORS.error }]}>
-                  - ₹{computedDiscount.toFixed(0)}
+                  - ₹{computedDiscount.toFixed(2)}
                   {discountType === 'percent' && rawDiscount > 0 ? ` (${rawDiscount}%)` : ''}
                 </Text>
               </View>
 
               <View style={[styles.sumLine, styles.totalLine]}>
-                <Text style={styles.finalTotalLabel}>Client Quotation Price:</Text>
-                <Text style={styles.finalTotalVal}>₹{finalClientPrice.toFixed(0)}</Text>
+                <Text style={styles.finalTotalLabel}>Client total</Text>
+                <Text style={styles.finalTotalVal}>₹{finalClientPrice.toFixed(2)}</Text>
               </View>
 
               {/* Admin Cost & Profit Analytics */}
               {isAdmin && (
                 <View style={styles.adminBreakdownBox}>
                   <View style={styles.sumLine}>
-                    <Text style={styles.adminLabel}>Total Studio Direct Cost:</Text>
-                    <Text style={styles.adminVal}>₹{totalCost.toFixed(0)}</Text>
+                    <Text style={styles.adminLabel}>Internal cost</Text>
+                    <Text style={styles.adminVal}>₹{totalCost.toFixed(2)}</Text>
                   </View>
 
                   <View style={styles.sumLine}>
-                    <Text style={styles.adminLabel}>Estimated Net Profit:</Text>
+                    <Text style={styles.adminLabel}>Estimated profit</Text>
                     <Text
                       style={[
                         styles.adminVal,
                         { color: netProfit >= 0 ? COLORS.success : COLORS.error, fontWeight: 'bold' },
                       ]}
                     >
-                      {netProfit >= 0 ? `+₹${netProfit.toFixed(0)}` : `-₹${Math.abs(netProfit).toFixed(0)}`}
+                      {netProfit >= 0 ? `+₹${netProfit.toFixed(2)}` : `-₹${Math.abs(netProfit).toFixed(2)}`}
                     </Text>
                   </View>
 
@@ -340,7 +343,7 @@ export default function EstimationScreen({ navigation }) {
                   {netProfit < 0 ? (
                     <View style={styles.lossWarningBox}>
                       <Text style={styles.lossWarningText}>
-                        Warning: Discount exceeds profit! You will incur a loss of ₹{Math.abs(netProfit).toFixed(0)}.
+                        Warning: Discount exceeds profit! You will incur a loss of ₹{Math.abs(netProfit).toFixed(2)}.
                       </Text>
                     </View>
                   ) : null}
@@ -348,7 +351,7 @@ export default function EstimationScreen({ navigation }) {
               )}
 
               {/* Export to Bill Button */}
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={[styles.exportBtn, selectedList.length === 0 && styles.exportBtnDisabled]}
                 onPress={handleCreateBill}
                 disabled={selectedList.length === 0}
@@ -421,12 +424,12 @@ const styles = createStyles({
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-  itemCardSelected: { borderColor: COLORS.primary, backgroundColor: '#edf2ff' },
+  itemCardSelected: { borderColor: COLORS.primary, backgroundColor: '#eff0e8' },
   itemInfo: { flex: 1 },
   itemName: { fontSize: 15, fontWeight: '600', color: COLORS.text },
   itemRate: { fontSize: 13, color: COLORS.primary, fontWeight: 'bold', marginTop: 2 },
   unitText: { fontSize: 12, fontWeight: 'normal', color: COLORS.subtext },
-  costBadge: { fontSize: 11, color: '#b85e19', marginTop: 2 },
+  costBadge: { fontSize: 11, color: '#946546', marginTop: 2 },
   qtyControls: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   qtyBtn: {
     width: 32,
@@ -553,4 +556,3 @@ const styles = createStyles({
   exportBtnDisabled: { opacity: 0.5 },
   exportBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 14 },
 });
-

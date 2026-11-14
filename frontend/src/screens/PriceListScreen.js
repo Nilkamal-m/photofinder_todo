@@ -1,25 +1,16 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useCallback } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
-  Modal, TextInput, ActivityIndicator, ScrollView,
+  Modal, ActivityIndicator,
 } from 'react-native';
 import api from '../services/api';
-import { serviceCost } from '../utils/pricing';
+import { useFocusEffect } from '@react-navigation/native';
+import ServiceForm from '../components/ServiceForm';
 import { useAuth } from '../context/AuthContext';
 import { confirmDialog, notify } from '../utils/dialog';
 
 import { COLORS, createStyles } from '../design/system';
-
-const CATEGORIES = ['video', 'photography', 'editing', 'equipment', 'travel', 'other'];
-
-const UNIT_OPTIONS = [
-  'per minute',
-  'per hour',
-  'per day',
-  'per person',
-  'per unit',
-  'per piece',
-];
 
 export default function PriceListScreen({ navigation }) {
   const { user } = useAuth();
@@ -28,12 +19,8 @@ export default function PriceListScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState(null);
-  const emptyForm = () => ({name:'', description:'', unit:'per minute', sellingPrice:'', costComponents:[], category:'video'});
-  const [form, setForm] = useState(emptyForm);
-  const totalCost = serviceCost(form);
-  const margin = (Number(form.sellingPrice) || 0) - totalCost;
-  const updateCost = (index, field, value) => setForm(current => ({...current, costComponents:current.costComponents.map((part,i) => i === index ? {...part,[field]:value} : part)}));
-  const addCost = name => setForm(current => ({...current,costComponents:[...current.costComponents,{name,amount:'',person:''}]}));
+  const [types,setTypes]=useState([]);
+  const loadTypes=useCallback(async()=>{const {data}=await api.get('/prices/types');setTypes(data);},[]);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -41,6 +28,7 @@ export default function PriceListScreen({ navigation }) {
     try {
       setLoading(true);
       const { data } = await api.get('/prices');
+      await loadTypes();
       setItems(data);
     } catch (err) {
       notify('Error', err.response?.data?.message || 'Failed to load prices');
@@ -49,73 +37,17 @@ export default function PriceListScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchItems();
-  }, [fetchItems]);
+  }, [fetchItems]));
 
-  const openCreate = () => {
-    setEditing(null);
-    setForm(emptyForm());
-    setFormError('');
-    setModalVisible(true);
-  };
-
-  const openEdit = (item) => {
-    setEditing(item);
-    setForm({
-      name: item.name,
-      description: item.description || '',
-      unit: item.unit || 'per hour',
-      sellingPrice: String(item.sellingPrice || ''),
-      costComponents: (item.costComponents?.length ? item.costComponents : item.costPrice ? [{name:'Service cost',amount:item.costPrice,person:''}] : []).map(p => ({...p, amount: String(p.amount)})),
-      category: item.category || 'other',
-    });
-    setFormError('');
-    setModalVisible(true);
-  };
-
-  const save = async () => {
-    setFormError('');
-    const name = form.name.trim();
-    if (!name) {
-      setFormError('Item name is required');
-      return;
-    }
-    if (!form.unit) {
-      setFormError('Please select or specify a unit');
-      return;
-    }
-    const sellingPrice = Number(form.sellingPrice);
-    if (!Number.isFinite(sellingPrice) || sellingPrice <= 0) {
-      setFormError('Selling price must be a valid positive number');
-      return;
-    }
-
-    if (form.costComponents.some(p => !p.name.trim() || !p.amount.trim() || !Number.isFinite(Number(p.amount)) || Number(p.amount) < 0)) { setFormError('Enter a name and valid amount for each cost'); return; }
-    setSaving(true);
-    try {
-      const payload = {
-        name,
-        description: form.description.trim(),
-        unit: form.unit.trim(),
-        sellingPrice,
-        costPrice: totalCost,
-        category: form.category,
-        costComponents: form.costComponents.map(p => ({...p, amount: Number(p.amount)})),
-      };
-
-      if (editing) {
-        await api.put(`/prices/${editing._id}`, payload);
-      } else {
-        await api.post('/prices', payload);
-      }
-      setModalVisible(false);
-      fetchItems();
-    } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to save item');
-    } finally {
-      setSaving(false);
-    }
+  const openCreate = () => {setEditing(null);setFormError('');setModalVisible(true);};
+  const openEdit = item => {setEditing(item);setFormError('');setModalVisible(true);};
+  const save = async payload => {
+    setSaving(true);setFormError('');
+    try {if(editing)await api.put(`/prices/${editing._id}`,payload);else await api.post('/prices',payload);setModalVisible(false);await fetchItems();}
+    catch(err){setFormError(err.response?.data?.message || 'Unable to save service');}
+    finally{setSaving(false);}
   };
 
   const handleDelete = (item) => {
@@ -130,10 +62,10 @@ export default function PriceListScreen({ navigation }) {
   };
 
   const catColors = {
-    video: '#626f89',
-    photography: '#2459d3',
+    video: '#72766c',
+    photography: '#4e5941',
     editing: '#00695c',
-    equipment: '#b85e19',
+    equipment: '#946546',
     travel: '#37474f',
     other: '#546e7a',
   };
@@ -166,10 +98,10 @@ export default function PriceListScreen({ navigation }) {
 
       {isAdmin && (
         <View style={styles.itemActions}>
-          <TouchableOpacity style={styles.editBtn} onPress={() => openEdit(item)}>
+          <TouchableOpacity accessibilityRole="button" style={styles.editBtn} onPress={() => openEdit(item)}>
             <Text style={styles.editBtnText}>Edit</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(item)}>
+          <TouchableOpacity accessibilityRole="button" style={styles.delBtn} onPress={() => handleDelete(item)}>
             <Text style={styles.delBtnText}>Delete</Text>
           </TouchableOpacity>
         </View>
@@ -181,16 +113,16 @@ export default function PriceListScreen({ navigation }) {
     <View style={styles.container}>
       {/* Top Header */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
-        <View>
-          <Text style={styles.heading}>Price List</Text>
+        <View style={{flex:1,minWidth:140}}>
+          <Text style={styles.heading}>Services</Text>
           <Text style={styles.subheading}>Service rates and costs</Text>
         </View>
         {isAdmin && (
-          <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
-            <Text style={styles.addBtnText}>+ Add Item</Text>
+          <TouchableOpacity accessibilityRole="button" style={styles.addBtn} onPress={openCreate}>
+            <Text style={styles.addBtnText}>Add service</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -211,7 +143,7 @@ export default function PriceListScreen({ navigation }) {
               
               <Text style={styles.emptyText}>No price items yet.</Text>
               {isAdmin && (
-                <TouchableOpacity style={styles.emptyAddBtn} onPress={openCreate}>
+                <TouchableOpacity accessibilityRole="button" style={styles.emptyAddBtn} onPress={openCreate}>
                   <Text style={styles.emptyAddBtnText}>Add service</Text>
                 </TouchableOpacity>
               )}
@@ -221,107 +153,18 @@ export default function PriceListScreen({ navigation }) {
       )}
 
       {/* Add / Edit Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{editing ? 'Edit Price Item' : 'New Price Item'}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <Text style={styles.modalTitle}>{editing ? 'Edit service' : 'New service'}</Text>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close dialog" onPress={() => setModalVisible(false)}>
                 <Text style={styles.closeIcon}>×</Text>
               </TouchableOpacity>
             </View>
 
-            <ScrollView contentContainerStyle={styles.modalScroll}>
-              {formError ? (
-                <View style={styles.errorBox}>
-                  <Text style={styles.errorText}>{formError}</Text>
-                </View>
-              ) : null}
+            {modalVisible&&<ServiceForm initial={editing} types={types} onSave={save} onCancel={()=>setModalVisible(false)} saving={saving} error={formError} onTypesUpdated={loadTypes}/>}
 
-              <Text style={styles.fieldLabel}>Service name *</Text>
-              <TextInput
-                style={styles.input}
-                                value={form.name}
-                onChangeText={(v) => { setForm({ ...form, name: v }); setFormError(''); }}
-              />
-
-              <Text style={styles.fieldLabel}>Description</Text>
-              <TextInput
-                style={styles.input}
-                                value={form.description}
-                onChangeText={(v) => setForm({ ...form, description: v })}
-              />
-
-              <Text style={styles.fieldLabel}>Select Unit *</Text>
-              <View style={styles.chipRow}>
-                {UNIT_OPTIONS.map((unit) => {
-                  const selected = form.unit === unit;
-                  return (
-                    <TouchableOpacity
-                      key={unit}
-                      style={[styles.chip, selected && styles.chipSelected]}
-                      onPress={() => setForm({ ...form, unit })}
-                    >
-                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{unit}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {!UNIT_OPTIONS.includes(form.unit) && <TextInput accessibilityLabel="Custom unit" style={styles.input} value={form.unit} onChangeText={unit => setForm({...form,unit})} />}
-              <Text style={styles.fieldLabel}>Client rate (₹) *</Text>
-              <TextInput accessibilityLabel="Client rate" style={styles.input} keyboardType="decimal-pad" value={form.sellingPrice} onChangeText={sellingPrice => setForm({...form,sellingPrice})} />
-              {isAdmin && <View>
-                <Text style={styles.fieldLabel}>Costs · {form.unit}</Text>
-                <Text style={styles.itemDesc}>Choose an expense, enter its amount, and assign a person if needed.</Text>
-                <View style={[styles.chipRow,{marginTop:12}]}>{['Editing','Equipment','Electricity','Other'].map(name => <TouchableOpacity key={name} style={styles.chip} onPress={() => addCost(name)}><Text style={styles.chipText}>+ {name}</Text></TouchableOpacity>)}</View>
-                {form.costComponents.map((part,index) => <View key={index} style={styles.costRow}>
-                  <View style={{flexDirection:'row',alignItems:'center',gap:12}}>
-                    <TextInput accessibilityLabel="Cost name" style={[styles.input,{flex:1}]} value={part.name} onChangeText={v => updateCost(index,'name',v)} />
-                    <TouchableOpacity accessibilityLabel={'Remove '+part.name} style={styles.removeCost} onPress={() => setForm(current => ({...current,costComponents:current.costComponents.filter((_,i) => i !== index)}))}><Text style={{color:COLORS.error,fontSize:22}}>×</Text></TouchableOpacity>
-                  </View>
-                  <View style={{flexDirection:'row',gap:12}}>
-                    <View style={{flex:1}}><Text style={styles.fieldLabel}>Amount (₹)</Text><TextInput accessibilityLabel={part.name+' amount'} style={styles.input} keyboardType="decimal-pad" value={part.amount} onChangeText={v => updateCost(index,'amount',v)} /></View>
-                    <View style={{flex:1}}><Text style={styles.fieldLabel}>Person (optional)</Text><TextInput accessibilityLabel={part.name+' person'} style={styles.input} value={part.person} onChangeText={v => updateCost(index,'person',v)} /></View>
-                  </View>
-                </View>)}
-                <View style={styles.liveSummary} accessibilityLiveRegion="polite">
-                  <Text style={styles.fieldLabel}>Per {form.unit.replace('per ','')}</Text>
-                  <View style={styles.summaryLine}><Text>Client rate</Text><Text style={styles.summaryNumber}>₹{(Number(form.sellingPrice)||0).toFixed(2)}</Text></View>
-                  <View style={styles.summaryLine}><Text>Total cost</Text><Text style={styles.summaryNumber}>₹{totalCost.toFixed(2)}</Text></View>
-                  <View style={styles.summaryLine}><Text>Profit</Text><Text style={[styles.summaryNumber,{color:margin<0?COLORS.error:COLORS.success}]}>₹{margin.toFixed(2)}</Text></View>
-                </View>
-              </View>}
-
-              <Text style={styles.fieldLabel}>Category</Text>
-              <View style={styles.chipRow}>
-                {CATEGORIES.map((cat) => {
-                  const selected = form.category === cat;
-                  return (
-                    <TouchableOpacity
-                      key={cat}
-                      style={[styles.chip, selected && styles.chipSelected]}
-                      onPress={() => setForm({ ...form, category: cat })}
-                    >
-                      <Text style={[styles.chipText, selected && styles.chipTextSelected]}>{cat}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
-                  <Text style={styles.cancelBtnText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={save} disabled={saving}>
-                  {saving ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.saveBtnText}>{editing ? 'Update Item' : 'Create Item'}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
           </View>
         </View>
       </Modal>
@@ -330,11 +173,6 @@ export default function PriceListScreen({ navigation }) {
 }
 
 const styles = createStyles({
-  costRow:{padding:14,backgroundColor:'#f3f6fd',borderRadius:10,marginBottom:10},
-  removeCost:{width:44,height:44,alignItems:'center',justifyContent:'center'},
-  liveSummary:{backgroundColor:COLORS.primaryLight,padding:18,borderRadius:10,marginVertical:16},
-  summaryLine:{flexDirection:'row',justifyContent:'space-between',paddingVertical:7},
-  summaryNumber:{fontWeight:'600',fontSize:16,color:COLORS.primary},
   container: { flex: 1, backgroundColor: '#ffffff' },
   topBar: {
     backgroundColor: '#ffffff',
@@ -350,7 +188,6 @@ const styles = createStyles({
   heading: { color: COLORS.text, fontSize: 22, fontWeight: 'bold' },
   subheading: { color: COLORS.subtext, fontSize: 13, marginTop: 2 },
   backBtn: { paddingVertical: 8, paddingRight: 14 },
-  backBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 14 },
   addBtn: {
     backgroundColor: COLORS.primary,
     paddingHorizontal: 16,
@@ -392,7 +229,7 @@ const styles = createStyles({
   priceTag: { fontSize: 18, fontWeight: 'bold', color: COLORS.primary, marginTop: 2 },
   unitText: { fontSize: 14, fontWeight: 'normal', color: COLORS.subtext },
   adminStats: { alignItems: 'flex-end' },
-  statLabel: { fontSize: 13, color: '#b85e19', fontWeight: '500' },
+  statLabel: { fontSize: 13, color: '#946546', fontWeight: '500' },
   statProfit: { fontSize: 13, color: COLORS.success, fontWeight: 'bold', marginTop: 2 },
   itemActions: {
     flexDirection: 'row',
@@ -404,14 +241,14 @@ const styles = createStyles({
   },
   editBtn: {
     flex: 1,
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     borderRadius: 8,
     paddingVertical: 9,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
-  editBtnText: { color: '#2459d3', fontWeight: '600', fontSize: 14 },
+  editBtnText: { color: '#4e5941', fontWeight: '600', fontSize: 14 },
   delBtn: {
     flex: 1,
     backgroundColor: '#fff5f5',
@@ -423,7 +260,6 @@ const styles = createStyles({
   },
   delBtnText: { color: COLORS.error, fontWeight: '600', fontSize: 14 },
   empty: { alignItems: 'center', marginTop: 80, padding: 20 },
-  emptyIcon: { fontSize: 48, marginBottom: 10 },
   emptyText: { color: COLORS.subtext, fontSize: 16, marginBottom: 16 },
   emptyAddBtn: {
     backgroundColor: COLORS.primary,
@@ -460,59 +296,5 @@ const styles = createStyles({
     borderBottomColor: '#f0f0f0',
   },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: COLORS.text },
-  closeIcon: { fontSize: 20, color: COLORS.subtext, padding: 4 },
-  modalScroll: { padding: 20 },
-  errorBox: {
-    backgroundColor: '#ffebee',
-    borderRadius: 8,
-    padding: 10,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: '#ffcdd2',
-  },
-  errorText: { color: COLORS.error, fontSize: 13, fontWeight: '500' },
-  fieldLabel: { fontSize: 13, fontWeight: '600', color: COLORS.text, marginBottom: 6, marginTop: 4 },
-  input: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 11,
-    marginBottom: 12,
-    fontSize: 14,
-    backgroundColor: '#fafafa',
-  },
-  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
-  chip: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: '#fafafa',
-  },
-  chipSelected: {
-    backgroundColor: COLORS.primary,
-    borderColor: COLORS.primary,
-  },
-  chipText: { color: COLORS.text, fontSize: 12, fontWeight: '500' },
-  chipTextSelected: { color: '#ffffff', fontWeight: 'bold' },
-  priceInputsRow: { flexDirection: 'row' },
-  modalBtns: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  cancelBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  cancelBtnText: { color: COLORS.text, fontWeight: '600' },
-  saveBtn: {
-    flex: 1.5,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    padding: 12,
-    alignItems: 'center',
-  },
-  saveBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 15 },
+  closeIcon: { fontSize: 20, color: COLORS.subtext, padding: 4 }
 });

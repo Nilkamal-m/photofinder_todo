@@ -12,6 +12,7 @@ const packageSchema = new mongoose.Schema(
         unit: { type: String },
         quantity: { type: Number, required: true, default: 1 },
         sellingPrice: { type: Number, required: true },
+        costComponents: [require('./CostComponent')],
         costPrice: { type: Number, default: 0 },
       },
     ],
@@ -27,8 +28,8 @@ const packageSchema = new mongoose.Schema(
 
 // Auto-calculate totals
 packageSchema.pre('save', function (next) {
-  this.totalSellingPrice = round(this.items.reduce((sum, item) => sum + item.sellingPrice * item.quantity, 0));
-  this.totalCostPrice = round(this.items.reduce((sum, item) => sum + item.costPrice * item.quantity, 0));
+  this.totalSellingPrice = round(this.items.reduce((sum, item) => sum + round(item.sellingPrice * item.quantity), 0));
+  this.totalCostPrice = round(this.items.reduce((sum, item) => sum + round(item.costPrice * item.quantity), 0));
   this.profit = round(this.totalSellingPrice - this.totalCostPrice);
   next();
 });

@@ -9,20 +9,22 @@ const billSchema = new mongoose.Schema(
     package: { type: mongoose.Schema.Types.ObjectId, ref: 'Package' },
     items: [
       {
+        priceItem: { type: mongoose.Schema.Types.ObjectId, ref:'PriceItem' },
         name: { type: String, required: true },
         unit: { type: String },
         quantity: { type: Number, required: true },
         sellingPrice: { type: Number, required: true },
         costComponents: [require('./CostComponent')],
         costPrice: { type: Number, default: 0 },
+        assignedTo: {type:mongoose.Schema.Types.ObjectId,ref:'User'},
+        deliveryStatus: {type:String,enum:['pending','delivered'],default:'pending'},
+        deliveredAt: {type:Date},
         lineTotal: { type: Number },
       },
     ],
     subtotal: { type: Number, default: 0 },
     discount: { type: Number, default: 0 },
     totalAmount: { type: Number, default: 0 },
-    totalCost: { type: Number, default: 0 },
-    profit: { type: Number, default: 0 },
     advancePaid: { type: Number, default: 0 },
     balanceDue: { type: Number, default: 0 },
     status: {
@@ -46,7 +48,7 @@ const billSchema = new mongoose.Schema(
 
 billSchema.pre('save', function (next) {
   if (!this.billNumber) {
-    this.billNumber = 'PF-' + Date.now().toString().slice(-6);
+    this.billNumber = 'PF-' + Date.now().toString(36).toUpperCase() + '-' + uuidv4().slice(0,4).toUpperCase();
   }
   if (!this.shareToken) {
     this.shareToken = uuidv4();
@@ -56,15 +58,16 @@ billSchema.pre('save', function (next) {
     ...item.toObject ? item.toObject() : item,
     lineTotal: round(item.sellingPrice * item.quantity),
   }));
-  this.subtotal = round(this.items.reduce((sum, item) => sum + item.sellingPrice * item.quantity, 0));
+  this.subtotal = round(this.items.reduce((sum, item) => sum + item.lineTotal, 0));
   this.discount = round(Math.min(this.subtotal, Math.max(0,this.discount || 0)));
   this.advancePaid = round(Math.max(0,this.advancePaid || 0));
   this.totalAmount = round(this.subtotal - this.discount);
-  this.totalCost = round(this.items.reduce((sum, item) => sum + (item.costPrice || 0) * item.quantity, 0));
-  this.profit = round(this.totalAmount - this.totalCost);
   this.balanceDue = round(Math.max(0,this.totalAmount - this.advancePaid));
+  if (this.status !== 'cancelled') {
+    if (this.balanceDue === 0 && this.totalAmount > 0) this.status = 'paid';
+    else if (this.status === 'paid') this.status = 'draft';
+  }
   next();
 });
 
 module.exports = mongoose.model('Bill', billSchema);
-

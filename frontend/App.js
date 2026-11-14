@@ -1,5 +1,5 @@
-import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import React, { useState } from 'react';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { ActivityIndicator, View } from 'react-native';
 
@@ -18,11 +18,17 @@ import SharedBillScreen from './src/screens/SharedBillScreen';
 import EstimationScreen from './src/screens/EstimationScreen';
 import DatesScreen from './src/screens/DatesScreen';
 import TeamScreen from './src/screens/TeamScreen';
+import LandingScreen from './src/screens/LandingScreen';
+import Workspace from './src/design/Workspace';
+import WebPolish from './src/design/WebPolish';
+import EnquiriesScreen from './src/screens/EnquiriesScreen';
 
 const Stack = createNativeStackNavigator();
+const navigationRef = createNavigationContainerRef();
 
 function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, logout } = useAuth();
+  const [activeRoute,setActiveRoute] = useState('Home');
 
   if (loading) {
     return (
@@ -38,13 +44,16 @@ function AppNavigator() {
     window.location &&
     (window.location.search.includes('token=') || window.location.pathname.includes('/view/'));
 
-  const initialRoute = hasShareParam ? 'SharedBill' : (!user ? 'Login' : 'Home');
+  const initialRoute = hasShareParam ? 'SharedBill' : (!user ? 'Landing' : 'Home');
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onStateChange={() => setActiveRoute(navigationRef.getCurrentRoute()?.name || 'Home')}>
+      <WebPolish />
+      <Workspace user={user} route={activeRoute} logout={logout} navigate={name => navigationRef.isReady() && navigationRef.navigate(name)}>
       <Stack.Navigator initialRouteName={initialRoute} screenOptions={{ headerShown: false }}>
         {!user ? (
           <>
+            <Stack.Screen name="Landing" component={LandingScreen} />
             <Stack.Screen name="Login" component={LoginScreen} />
             <Stack.Screen name="SharedBill" component={SharedBillScreen} />
           </>
@@ -58,12 +67,14 @@ function AppNavigator() {
             <Stack.Screen name="Estimation" component={EstimationScreen} />
             <Stack.Screen name="Dates" component={DatesScreen} />
             <Stack.Screen name="Team" component={TeamScreen} />
+            <Stack.Screen name="Enquiries" component={EnquiriesScreen} />
             <Stack.Screen name="CreateBill" component={CreateBillScreen} />
             <Stack.Screen name="BillDetail" component={BillDetailScreen} />
             <Stack.Screen name="SharedBill" component={SharedBillScreen} />
           </>
         )}
       </Stack.Navigator>
+      </Workspace>
     </NavigationContainer>
   );
 }

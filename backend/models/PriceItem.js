@@ -8,11 +8,10 @@ const priceItemSchema = new mongoose.Schema(
     sellingPrice: { type: Number, required: true }, // price shown to client
     costComponents: [require('./CostComponent')],
     costPrice: { type: Number, default: 0 }, // admin-only: actual cost
-    category: {
-      type: String,
-      enum: ['video', 'photography', 'editing', 'equipment', 'travel', 'other'],
-      default: 'other',
-    },
+    category: { type:String, default:'Other', trim:true },
+    serviceType: {type:mongoose.Schema.Types.ObjectId,ref:'ServiceType'},
+    profitMode: {type:String,enum:['percent','fixed']},
+    profitValue: {type:Number,min:0},
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

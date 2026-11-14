@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator,
+  ScrollView, ActivityIndicator, useWindowDimensions,
 } from 'react-native';
-import axios from 'axios';
+import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 import { COLORS, createStyles } from '../design/system';
 
 export default function SharedBillScreen({ route, navigation }) {
+  const compact = useWindowDimensions().width < 600;
+  const { user } = useAuth();
   // Token from route params or browser URL (on web)
   let initialToken = route?.params?.token;
   let initialPhone = '';
@@ -42,8 +45,8 @@ export default function SharedBillScreen({ route, navigation }) {
     setLoading(true);
     setError('');
     try {
-      const { data } = await axios.get(
-        `http://localhost:3001/api/bills/shared/${trimmedToken}?phone=${encodeURIComponent(trimmedPhone)}`
+      const { data } = await api.get(
+        `/bills/shared/${encodeURIComponent(trimmedToken)}?phone=${encodeURIComponent(trimmedPhone)}`
       );
       setBill(data);
       setVerified(true);
@@ -61,9 +64,9 @@ export default function SharedBillScreen({ route, navigation }) {
           <View style={styles.logoBadge}>
             <Text style={styles.logo}>PF</Text>
           </View>
-          <Text style={styles.verifyTitle}>Secure Bill & Agreement</Text>
+          <Text style={styles.verifyTitle}>Your invoice</Text>
           <Text style={styles.verifySubtitle}>
-            This bill was privately shared. Please enter the phone number it was shared with to view and verify.
+            Enter the phone number this invoice was shared with.
           </Text>
 
           {error ? (
@@ -75,7 +78,7 @@ export default function SharedBillScreen({ route, navigation }) {
           {!route?.params?.token && !initialToken && (
             <>
               <Text style={styles.label}>Bill Share Token</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Bill Share Token"
                 style={styles.input}
                 placeholder="Enter bill share token"
                 value={tokenInput}
@@ -85,23 +88,23 @@ export default function SharedBillScreen({ route, navigation }) {
           )}
 
           <Text style={styles.label}>Your Phone Number</Text>
-          <TextInput
+          <TextInput accessibilityLabel="Your Phone Number"
             style={styles.input}
                         value={phone}
             onChangeText={(v) => { setPhone(v); setError(''); }}
             keyboardType="phone-pad"
           />
 
-          <TouchableOpacity style={styles.verifyBtn} onPress={verify} disabled={loading}>
+          <TouchableOpacity accessibilityRole="button" style={styles.verifyBtn} onPress={verify} disabled={loading}>
             {loading ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.verifyBtnText}>Unlock & View Bill </Text>
+              <Text style={styles.verifyBtnText}>View invoice</Text>
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.backLink} onPress={() => navigation?.navigate('Login')}>
-            <Text style={styles.backLinkText}>← Back to Studio Login</Text>
+          <TouchableOpacity accessibilityRole="button" style={styles.backLink} onPress={() => navigation?.navigate(user ? 'Home' : 'Login')}>
+            <Text style={styles.backLinkText}>← Back to studio</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -111,13 +114,13 @@ export default function SharedBillScreen({ route, navigation }) {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.scrollContent}>
       {/* Invoice Banner */}
-      <View style={styles.invoiceHeader}>
+      <View style={[styles.invoiceHeader,compact&&{flexDirection:'column',gap:18}]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.studioName}>PhotoFinder Studio</Text>
           <Text style={styles.studioSub}>Professional Photography & Videography</Text>
           <Text style={styles.docType}>Verified Client Invoice & Agreement</Text>
         </View>
-        <View style={styles.metaRight}>
+        <View style={[styles.metaRight,compact&&{alignItems:'flex-start'}]}>
           <Text style={styles.billNum}>#{bill.billNumber}</Text>
           <Text style={styles.billDate}>{new Date(bill.createdAt).toLocaleDateString()}</Text>
         </View>
@@ -173,7 +176,7 @@ export default function SharedBillScreen({ route, navigation }) {
             </View>
             <Text style={styles.colQty}>{item.quantity}</Text>
             <Text style={styles.colRate}>₹{item.sellingPrice}</Text>
-            <Text style={styles.colTotal}>₹{item.sellingPrice * item.quantity}</Text>
+            <Text style={styles.colTotal}>₹{(item.lineTotal ?? item.sellingPrice * item.quantity).toFixed(2)}</Text>
           </View>
         ))}
       </View>
@@ -270,7 +273,7 @@ const styles = createStyles({
     width: 68,
     height: 68,
     borderRadius: 34,
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     alignItems: 'center',
     justifyContent: 'center',
     alignSelf: 'center',
@@ -321,7 +324,7 @@ const styles = createStyles({
     paddingBottom: 20,
     marginBottom: 20,
     borderBottomWidth: 2,
-    borderBottomColor: '#2459d3',
+    borderBottomColor: '#4e5941',
   },
   studioName: { fontSize: 22, fontWeight: 'bold', color: COLORS.primary },
   studioSub: { fontSize: 13, color: COLORS.subtext, marginTop: 2 },

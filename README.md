@@ -67,6 +67,7 @@ After logging in as admin, go to **Price List** → tap **"Seed"** to add sample
 | 🧾 Bill Generator | 4-step wizard: Client → Services → Agreement → Review |
 | 🧮 Estimation Calculator | Compare totals, discounts, safe margins, and estimated profit before billing |
 | 📅 Important Dates | Check availability, identify client bookings, and block studio dates |
+| 🌿 Public Studio Page | Hero story, published packages, budget estimate, and enquiry form for visitors |
 | 📄 Agreement | Auto-generated agreement with customizable terms & conditions |
 | 📤 Secure Sharing | Share bill via unique link — only the specified phone can view it |
 | 💰 Profit (Admin) | Profit margin only visible to admin role |
@@ -102,6 +103,7 @@ photofinder_todo/
 │   │   ├── packages.js        # Package CRUD
 │   │   ├── clients.js         # Client CRUD
 │   │   └── bills.js           # Bill CRUD + sharing
+│   │   ├── enquiries.js          # Public enquiry submissions
 │   └── middleware/
 │       └── auth.js            # JWT protect + adminOnly
 └── frontend/
@@ -114,6 +116,7 @@ photofinder_todo/
         └── screens/
             ├── LoginScreen.js
             ├── HomeScreen.js
+            ├── LandingScreen.js   # Public studio landing page
             ├── PriceListScreen.js
             ├── PackagesScreen.js
             ├── ClientsScreen.js
@@ -155,12 +158,16 @@ For production, replace that value with the deployed API URL and add the deploye
 - Profit/cost price fields are stripped server-side for non-admin users
 - Admin endpoints protected with `adminOnly` middleware
 
-### Service costs and team payments
+### Services, assignments and wallets
 
-Admins can add cost components to a service in **Price list**. Each amount uses the service's unit (for example, a per-minute service has per-minute costs). Components replace the legacy base cost when present. Assign a person to a component to track what they earn.
+The service form offers suggested names or a custom name, searchable unit/type dropdowns, and expenses added through a small editor. Custom service types are stored for future use and can be renamed or deleted through **Manage types**. Deleting a type moves its services to Other. Deleting a service archives it so saved package references remain intact.
 
-Saving a bill snapshots the service's current costs and assignments. Costs are multiplied by the billed quantity. Client-facing bills hide internal costs and assignments. Existing bills retain their saved costs when prices change; legacy bills do not gain assignments retroactively.
+The server calculates the client rate as the sum of expenses plus either a percentage markup on that sum or a fixed profit amount. Existing services retain their previous rate until edited in the new form. Existing bills keep their saved rates and costs.
 
-Open **Team payments** to see assigned amounts, recorded payments, and balances. Cancelled and deleted bills do not contribute to earnings; recorded payments remain. Names are grouped without regard to letter case. Use consistent names for each person. Recording a payment tracks money already paid; it does not transfer money.
+Assign each service to a registered studio user in the bill’s final **Review & assign** step. Unassigned services do not create wallet credits. The wallet amount is the service’s rate multiplied by quantity, before bill-level discounts. It is pending until the bill owner marks that service delivered on the invoice. Client payment status is separate from delivery. Reopening delivery reverses the settlement. Reopen a delivered service before changing its assignee, quantity or rate.
 
-Cost checks: `node --test backend/tests/costs.test.js`.
+**Wallets** shows each user’s pending credits, settled work, payments and main balance (settled work minus recorded payments). Members see only their own wallet; admins can view all wallets and create, edit or delete payment records. These records describe money already paid; they do not transfer money. A negative main balance means payments exceed currently settled work.
+
+Bill changes recalculate credits directly from the saved services. Deleting a draft removes its pending credits; cancelling or deleting any bill removes its earnings. Payment records remain until explicitly edited or deleted. Earlier name-based cost records are preserved separately; they are not automatically matched to registered users.
+
+Run `cd backend && npm test` for the pricing, bill, delivery, wallet, access-control and CRUD regression checks. Restart the backend after updating these routes and models.

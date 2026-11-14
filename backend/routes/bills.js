@@ -2,8 +2,20 @@ const express = require('express');
 const router = express.Router();
 const Bill = require('../models/Bill');
 const { snapshotItems, hideCosts } = require('../utils/costs');
+const User=require('../models/User');
 const Client = require('../models/Client');
 const { protect } = require('../middleware/auth');
+
+async function assignedItems(items, existing=[]) {
+  if(!Array.isArray(items)||!items.length)throw new Error('Add at least one service');
+  for(const item of items){
+    if(item.assignedTo && !await User.exists({_id:item.assignedTo}))throw new Error('Choose a registered studio user');
+    const previous=existing.find(old=>(item._id && String(old._id)===String(item._id)) || old.name===item.name);
+    if(previous?.deliveryStatus==='delivered' && Object.prototype.hasOwnProperty.call(item,'assignedTo') && String(previous.assignedTo || '')!==String(item.assignedTo || ''))throw new Error('Reopen delivery before changing the assigned user');
+    if(previous?.deliveryStatus==='delivered' && (Number(item.quantity)!==previous.quantity || Number(item.sellingPrice)!==previous.sellingPrice))throw new Error('Reopen delivery before editing delivered service');
+  }
+  return snapshotItems(items,existing);
+}
 
 // Get all bills (for logged in user)
 router.get('/', protect, async (req, res) => {
@@ -13,17 +25,13 @@ router.get('/', protect, async (req, res) => {
       .sort({ createdAt: -1 });
     const result = bills.map((bill) => {
       const obj = bill.toObject();
+    hideCosts(obj);
     if (obj.package) hideCosts(obj.package);
-      if (req.user.role !== 'admin') {
-        delete obj.profit;
-        delete obj.totalCost;
-        obj.items = obj.items?.map((i) => { delete i.costPrice; delete i.costComponents; return i; });
-      }
       return obj;
     });
     res.json(result);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.name === 'ValidationError' || err.name === 'CastError' || ['Reopen delivery before editing delivered service','Choose a registered studio user','Reopen delivery before changing the assigned user','Add at least one service','Service quantity and rate must be valid'].includes(err.message) ? 400 : 500).json({ message: err.message });
   }
 });
 
@@ -35,15 +43,11 @@ router.get('/:id', protect, async (req, res) => {
       .populate('package');
     if (!bill) return res.status(404).json({ message: 'Bill not found' });
     const obj = bill.toObject();
+    hideCosts(obj);
     if (obj.package) hideCosts(obj.package);
-    if (req.user.role !== 'admin') {
-      delete obj.profit;
-      delete obj.totalCost;
-      obj.items = obj.items?.map((i) => { delete i.costPrice; delete i.costComponents; return i; });
-    }
     res.json(obj);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.name === 'ValidationError' || err.name === 'CastError' || ['Reopen delivery before editing delivered service','Choose a registered studio user','Reopen delivery before changing the assigned user','Add at least one service','Service quantity and rate must be valid'].includes(err.message) ? 400 : 500).json({ message: err.message });
   }
 });
 
@@ -56,6 +60,7 @@ router.get('/shared/:token', async (req, res) => {
       .populate('package');
     if (!bill) return res.status(404).json({ message: 'Bill not found' });
 
+    if (!bill.sharedAt || !bill.sharedWithPhone) return res.status(403).json({message:'This invoice has not been shared'});
     // Check if phone matches (case-insensitive & trimmed)
     if (bill.sharedWithPhone) {
       const expected = (bill.sharedWithPhone || '').trim();
@@ -68,13 +73,11 @@ router.get('/shared/:token', async (req, res) => {
     }
     const obj = bill.toObject();
     if (obj.package) hideCosts(obj.package);
-    // Always hide cost/profit from shared client view
-    delete obj.profit;
-    delete obj.totalCost;
-    obj.items = obj.items?.map((i) => { delete i.costPrice; delete i.costComponents; return i; });
+    hideCosts(obj);
+    obj.items.forEach(item=>{delete item.assignedTo;delete item.deliveryStatus;delete item.deliveredAt;});
     res.json(obj);
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.name === 'ValidationError' || err.name === 'CastError' || ['Reopen delivery before editing delivered service','Choose a registered studio user','Reopen delivery before changing the assigned user','Add at least one service','Service quantity and rate must be valid'].includes(err.message) ? 400 : 500).json({ message: err.message });
   }
 });
 
@@ -89,16 +92,17 @@ router.post('/', protect, async (req, res) => {
       return res.status(400).json({ message: 'At least one service item is required' });
     }
 
+    if (!await Client.exists({_id:client,createdBy:req.user._id})) return res.status(400).json({message:'Choose one of your clients'});
     const bill = new Bill({
       ...req.body,
-      items: await snapshotItems(items),
+      items: await assignedItems(items),
       createdBy: req.user._id,
     });
     await bill.save();
     await bill.populate('client');
-    res.status(201).json(req.user.role === 'admin' ? bill : hideCosts(bill.toObject()));
+    res.status(201).json(hideCosts(bill.toObject()));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.name === 'ValidationError' || err.name === 'CastError' || ['Reopen delivery before editing delivered service','Choose a registered studio user','Reopen delivery before changing the assigned user','Add at least one service','Service quantity and rate must be valid'].includes(err.message) ? 400 : 500).json({ message: err.message });
   }
 });
 
@@ -108,8 +112,11 @@ router.put('/:id', protect, async (req, res) => {
     const bill = await Bill.findOne({ _id: req.params.id, createdBy: req.user._id });
     if (!bill) return res.status(404).json({ message: 'Bill not found' });
 
-    if (req.body.client) bill.client = req.body.client;
-    if (req.body.items) bill.items = await snapshotItems(req.body.items, bill.items);
+    if (req.body.client) {
+      if (!await Client.exists({_id:req.body.client,createdBy:req.user._id})) return res.status(400).json({message:'Choose one of your clients'});
+      bill.client = req.body.client;
+    }
+    if (req.body.items) bill.items = await assignedItems(req.body.items, bill.items);
     if (req.body.discount !== undefined) bill.discount = req.body.discount;
     if (req.body.advancePaid !== undefined) bill.advancePaid = req.body.advancePaid;
     if (req.body.status) bill.status = req.body.status;
@@ -117,12 +124,24 @@ router.put('/:id', protect, async (req, res) => {
     if (req.body.agreementTerms) bill.agreementTerms = req.body.agreementTerms;
     if (req.body.clientSignature) bill.clientSignature = req.body.clientSignature;
 
-    await bill.save(); // triggers pre('save') to recalculate items line totals, subtotal, totalAmount, balanceDue, profit!
+    await bill.save();
     await bill.populate('client');
-    res.json(req.user.role === 'admin' ? bill : hideCosts(bill.toObject()));
+    res.json(hideCosts(bill.toObject()));
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.name === 'ValidationError' || err.name === 'CastError' || ['Reopen delivery before editing delivered service','Choose a registered studio user','Reopen delivery before changing the assigned user','Add at least one service','Service quantity and rate must be valid'].includes(err.message) ? 400 : 500).json({ message: err.message });
   }
+});
+
+// Delivery is separate from whether the client has paid the invoice.
+router.put('/:id/items/:itemId/delivery',protect,async(req,res)=>{
+  try {
+    if(!['pending','delivered'].includes(req.body.deliveryStatus))return res.status(400).json({message:'Choose pending or delivered'});
+    const bill=await Bill.findOne({_id:req.params.id,createdBy:req.user._id});if(!bill)return res.status(404).json({message:'Bill not found'});
+    if(bill.status==='cancelled')return res.status(400).json({message:'Reopen the bill before updating delivery'});
+    const item=bill.items.id(req.params.itemId);if(!item)return res.status(404).json({message:'Service not found'});
+    item.deliveryStatus=req.body.deliveryStatus;item.deliveredAt=req.body.deliveryStatus==='delivered'?(item.deliveredAt || new Date()):undefined;
+    await bill.save();await bill.populate('client');res.json(hideCosts(bill.toObject()));
+  }catch(e){res.status(400).json({message:e.message});}
 });
 
 // Share bill with a phone number
@@ -133,17 +152,18 @@ router.post('/:id/share', protect, async (req, res) => {
       return res.status(400).json({ message: 'Phone number is required to share' });
     }
 
-    const bill = await Bill.findOneAndUpdate(
-      { _id: req.params.id, createdBy: req.user._id },
-      { sharedWithPhone: phone, status: 'sent', sharedAt: new Date() },
-      { new: true }
-    ).populate('client');
-    if (!bill) return res.status(404).json({ message: 'Bill not found' });
+    const bill = await Bill.findOne({_id:req.params.id,createdBy:req.user._id}).populate('client');
+    if (!bill) return res.status(404).json({message:'Bill not found'});
+    if (bill.status==='cancelled') return res.status(400).json({message:'Reopen this bill before sharing it'});
+    bill.sharedWithPhone=phone;bill.sharedAt=new Date();
+    if (bill.status==='draft') bill.status='sent';
+    await bill.save();
 
-    const shareUrl = `http://localhost:8085/?token=${bill.shareToken}&phone=${phone}`;
-    res.json({ message: 'Bill shared successfully', shareToken: bill.shareToken, shareUrl, bill: req.user.role === 'admin' ? bill : hideCosts(bill.toObject()) });
+    const baseUrl = (process.env.FRONTEND_URL || req.get('origin') || 'http://localhost:8085').replace(/\/+$/, '');
+    const shareUrl = `${baseUrl}/?token=${encodeURIComponent(bill.shareToken)}`;
+    res.json({ message: 'Bill shared successfully', shareToken: bill.shareToken, shareUrl, bill: hideCosts(bill.toObject()) });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.name === 'ValidationError' || err.name === 'CastError' || ['Reopen delivery before editing delivered service','Choose a registered studio user','Reopen delivery before changing the assigned user','Add at least one service','Service quantity and rate must be valid'].includes(err.message) ? 400 : 500).json({ message: err.message });
   }
 });
 
@@ -154,7 +174,7 @@ router.delete('/:id', protect, async (req, res) => {
     if (!bill) return res.status(404).json({ message: 'Bill not found' });
     res.json({ message: 'Bill deleted successfully' });
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    res.status(err.name === 'ValidationError' || err.name === 'CastError' || ['Reopen delivery before editing delivered service','Choose a registered studio user','Reopen delivery before changing the assigned user','Add at least one service','Service quantity and rate must be valid'].includes(err.message) ? 400 : 500).json({ message: err.message });
   }
 });
 

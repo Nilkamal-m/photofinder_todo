@@ -3,6 +3,7 @@ const router = express.Router();
 const Package = require('../models/Package');
 const { protect, adminOnly } = require('../middleware/auth');
 const { v4: uuidv4 } = require('uuid');
+const { snapshotItems, hideCosts } = require('../utils/costs');
 
 // Get all packages
 router.get('/', protect, async (req, res) => {
@@ -15,11 +16,33 @@ router.get('/', protect, async (req, res) => {
       if (req.user.role !== 'admin') {
         delete obj.totalCostPrice;
         delete obj.profit;
-        obj.items = obj.items.map((i) => { delete i.costPrice; if (i.priceItem) { delete i.priceItem.costPrice; delete i.priceItem.costComponents; } return i; });
+        obj.items = obj.items.map((i) => { delete i.costPrice; delete i.costComponents; if (i.priceItem) { delete i.priceItem.costPrice; delete i.priceItem.costComponents; delete i.priceItem.profitMode; delete i.priceItem.profitValue; } return i; });
       }
       return obj;
     });
     res.json(result);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// Get packages intentionally published for the public studio page
+router.get('/public', async (req, res) => {
+  try {
+    const packages = await Package.find({ isPublic: true })
+      .select('name description items totalSellingPrice isPublic')
+      .sort({ createdAt: -1 });
+
+    res.json(packages.map((pkg) => {
+      const obj = pkg.toObject();
+      obj.items = obj.items.map((item) => ({
+        name: item.name,
+        unit: item.unit,
+        quantity: item.quantity,
+        sellingPrice: item.sellingPrice,
+      }));
+      return obj;
+    }));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -35,7 +58,7 @@ router.get('/:id', protect, async (req, res) => {
     if (req.user.role !== 'admin') {
       delete obj.totalCostPrice;
       delete obj.profit;
-      obj.items = obj.items.map((i) => { delete i.costPrice; if (i.priceItem) { delete i.priceItem.costPrice; delete i.priceItem.costComponents; } return i; });
+      obj.items = obj.items.map((i) => { delete i.costPrice; delete i.costComponents; if (i.priceItem) { delete i.priceItem.costPrice; delete i.priceItem.costComponents; delete i.priceItem.profitMode; delete i.priceItem.profitValue; } return i; });
     }
     res.json(obj);
   } catch (err) {
@@ -52,7 +75,7 @@ router.get('/share/:token', async (req, res) => {
     const obj = pkg.toObject();
     delete obj.totalCostPrice;
     delete obj.profit;
-    obj.items = obj.items.map((i) => { delete i.costPrice; if (i.priceItem) { delete i.priceItem.costPrice; delete i.priceItem.costComponents; } return i; });
+    obj.items = obj.items.map((i) => { delete i.costPrice; delete i.costComponents; if (i.priceItem) { delete i.priceItem.costPrice; delete i.priceItem.costComponents; delete i.priceItem.profitMode; delete i.priceItem.profitValue; } return i; });
     res.json(obj);
   } catch (err) {
     res.status(500).json({ message: err.message });
@@ -73,13 +96,13 @@ router.post('/', protect, async (req, res) => {
     const pkg = new Package({
       name: name.trim(),
       description,
-      items,
+      items: await snapshotItems(items),
       isPublic: isPublic !== undefined ? isPublic : false,
       createdBy: req.user._id,
       shareToken: uuidv4(),
     });
     await pkg.save();
-    res.status(201).json(pkg);
+    res.status(201).json(req.user.role === 'admin' ? pkg : hideCosts(pkg.toObject()));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
@@ -93,11 +116,11 @@ router.put('/:id', protect, async (req, res) => {
 
     if (req.body.name) pkg.name = req.body.name.trim();
     if (req.body.description !== undefined) pkg.description = req.body.description;
-    if (req.body.items) pkg.items = req.body.items;
+    if (req.body.items) pkg.items = await snapshotItems(req.body.items, pkg.items);
     if (req.body.isPublic !== undefined) pkg.isPublic = req.body.isPublic;
 
     await pkg.save(); // triggers pre('save') to recalculate totalSellingPrice, totalCostPrice, and profit!
-    res.json(pkg);
+    res.json(req.user.role === 'admin' ? pkg : hideCosts(pkg.toObject()));
   } catch (err) {
     res.status(500).json({ message: err.message });
   }

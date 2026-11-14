@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const { validDate } = require('../utils/dates');
 const BlockedDate = require('../models/BlockedDate');
 const Client = require('../models/Client');
 const { protect } = require('../middleware/auth');
@@ -66,6 +67,7 @@ router.get('/check', protect, async (req, res) => {
     }
 
     const dateStr = date.trim();
+    if (!validDate(dateStr)) return res.status(400).json({message:'Enter a valid date in YYYY-MM-DD format'});
 
     // Check manual blocked dates
     const blockedEntry = await BlockedDate.findOne({
@@ -126,6 +128,7 @@ router.post('/', protect, async (req, res) => {
     if (!date) return res.status(400).json({ message: 'Date is required' });
     if (!title || !title.trim()) return res.status(400).json({ message: 'Title / Reason is required' });
 
+    if (!validDate(date)) return res.status(400).json({message:'Enter a valid date in YYYY-MM-DD format'});
     const dateObj = new Date(date);
     if (isNaN(dateObj.getTime())) {
       return res.status(400).json({ message: 'Invalid date format' });
@@ -169,6 +172,8 @@ router.put('/:id', protect, async (req, res) => {
     if (req.body.type) entry.type = req.body.type;
     if (req.body.notes !== undefined) entry.notes = req.body.notes.trim();
     if (req.body.date) {
+      if (!validDate(req.body.date)) return res.status(400).json({message:'Enter a valid date in YYYY-MM-DD format'});
+      if (await BlockedDate.exists({_id:{$ne:entry._id},createdBy:req.user._id,dateString:req.body.date})) return res.status(400).json({message:'This date already has an entry'});
       const dObj = new Date(req.body.date);
       if (!isNaN(dObj.getTime())) {
         entry.date = dObj;

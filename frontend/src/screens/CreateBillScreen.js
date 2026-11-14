@@ -1,11 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
   Modal, TextInput, ActivityIndicator, FlatList,
 } from 'react-native';
 import api from '../services/api';
-import { totals, serviceCost } from '../utils/pricing';
-import { useAuth } from '../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
+import SelectField from '../components/SelectField';
+import { totals } from '../utils/pricing';
 import { notify } from '../utils/dialog';
 
 import { COLORS, createStyles } from '../design/system';
@@ -19,14 +21,13 @@ const DEFAULT_TERMS = [
 ];
 
 export default function CreateBillScreen({ route, navigation }) {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
   const { packageData, preselectedClient, editBillId } = route.params || {};
 
   const isEditing = !!editBillId;
 
   const [clients, setClients] = useState([]);
   const [priceItems, setPriceItems] = useState([]);
+  const [staff,setStaff]=useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
@@ -46,7 +47,7 @@ export default function CreateBillScreen({ route, navigation }) {
     })) || []
   );
 
-  const [discount, setDiscount] = useState('0');
+  const [discount, setDiscount] = useState(String(route.params?.initialDiscount || 0));
   const [advance, setAdvance] = useState('0');
   const [agreementText, setAgreementText] = useState(
     'This photography and videography agreement is made between PhotoFinder Studio and the client. The client agrees to the following terms and conditions for photography and videography services.'
@@ -54,11 +55,12 @@ export default function CreateBillScreen({ route, navigation }) {
   const [terms, setTerms] = useState([...DEFAULT_TERMS]);
   const [newTerm, setNewTerm] = useState('');
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     (async () => {
       try {
         setLoading(true);
-        const [cRes, pRes] = await Promise.all([api.get('/clients'), api.get('/prices')]);
+        const [cRes,pRes,uRes] = await Promise.all([api.get('/clients'),api.get('/prices'),api.get('/team/users')]);
+        setStaff(uRes.data);
         setClients(cRes.data);
         setPriceItems(pRes.data);
 
@@ -89,10 +91,10 @@ export default function CreateBillScreen({ route, navigation }) {
         setLoading(false);
       }
     })();
-  }, [editBillId]);
+  }, [editBillId]));
 
   const calculation = totals(items, discount, advance);
-  const {subtotal, total:totalAmount, cost:totalCost, profit, balance, discount:discNum} = calculation;
+  const {subtotal, total:totalAmount, balance, discount:discNum} = calculation;
   const advNum = Math.max(0,Number(advance) || 0);
 
   const toggleItem = (pi) => {
@@ -108,18 +110,15 @@ export default function CreateBillScreen({ route, navigation }) {
           unit: pi.unit,
           quantity: 1,
           sellingPrice: pi.sellingPrice,
-          costPrice: serviceCost(pi),
-          costComponents: pi.costComponents,
+          costPrice: pi.costPrice || 0,
         },
       ]);
     }
   };
 
-  const updateQty = (name, qtyStr) => {
-    const qty = Number(qtyStr);
-    setItems(
-      items.map((i) => (i.name === name ? { ...i, quantity: !Number.isFinite(qty) || qty <= 0 ? 1 : qty } : i))
-    );
+  const updateQty = (name, value) => {
+    if (!/^\d*\.?\d*$/.test(value)) return;
+    setItems(current => current.map(item => item.name === name ? {...item,quantity:value} : item));
   };
 
   const addTerm = () => {
@@ -145,6 +144,8 @@ export default function CreateBillScreen({ route, navigation }) {
       return;
     }
 
+    if (items.some(item=>!Number.isFinite(Number(item.quantity)) || Number(item.quantity)<=0)) {notify('Quantity required','Enter a positive quantity for each service');setStep(2);return;}
+    if (![discount,advance].every(value=>Number.isFinite(Number(value)) && Number(value)>=0)) {notify('Check payment amounts','Discount and advance must be valid amounts');setStep(2);return;}
     setSaving(true);
     try {
       const payload = {
@@ -186,10 +187,10 @@ export default function CreateBillScreen({ route, navigation }) {
     <View style={styles.container}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
-        <View>
+        <View style={{flex:1,minWidth:140}}>
           <Text style={styles.heading}>{isEditing ? 'Edit Bill' : 'New bill'}</Text>
           <Text style={styles.subheading}>Step {step} of 4</Text>
         </View>
@@ -203,6 +204,8 @@ export default function CreateBillScreen({ route, navigation }) {
       </View>
 
       <ScrollView style={styles.body} contentContainerStyle={{ padding: 20 }}>
+        {step===1 && clients.length===0 && <TouchableOpacity accessibilityRole="button" style={styles.prevBtn} onPress={()=>navigation.navigate('Clients')}><Text style={styles.prevBtnText}>Add your first client →</Text></TouchableOpacity>}
+        {step===2 && priceItems.length===0 && <TouchableOpacity accessibilityRole="button" style={styles.prevBtn} onPress={()=>navigation.navigate('PriceList')}><Text style={styles.prevBtnText}>Add a service →</Text></TouchableOpacity>}
         {/* STEP 1: CLIENT */}
         {step === 1 && (
           <View style={styles.stepContent}>
@@ -224,12 +227,12 @@ export default function CreateBillScreen({ route, navigation }) {
                     <Text style={styles.scEvent}>{selectedClient.eventVenue}</Text>
                   )}
                 </View>
-                <TouchableOpacity style={styles.changeBtn} onPress={() => setClientModal(true)}>
+                <TouchableOpacity accessibilityRole="button" style={styles.changeBtn} onPress={() => setClientModal(true)}>
                   <Text style={styles.changeBtnText}>Change</Text>
                 </TouchableOpacity>
               </View>
             ) : (
-              <TouchableOpacity style={styles.selectClientBtn} onPress={() => setClientModal(true)}>
+              <TouchableOpacity accessibilityRole="button" style={styles.selectClientBtn} onPress={() => setClientModal(true)}>
                 
                 <Text style={styles.selectClientText}>Select Existing Client</Text>
                 
@@ -237,7 +240,7 @@ export default function CreateBillScreen({ route, navigation }) {
             )}
 
             <View style={styles.navRow}>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={[styles.nextBtn, !selectedClient && styles.disabledBtn]}
                 onPress={() => {
                   if (!selectedClient) {
@@ -264,7 +267,7 @@ export default function CreateBillScreen({ route, navigation }) {
                 const sel = items.find((i) => i.name === pi.name);
                 return (
                   <View key={pi._id} style={[styles.piRow, sel && styles.piSelected]}>
-                    <TouchableOpacity style={styles.piLeft} onPress={() => toggleItem(pi)}>
+                    <TouchableOpacity accessibilityRole="button" style={styles.piLeft} onPress={() => toggleItem(pi)}>
                       <View style={[styles.checkbox, sel && styles.checkboxChecked]}>
                         {sel && <Text style={{ color: '#fff', fontWeight: 'bold' }}>✓</Text>}
                       </View>
@@ -277,9 +280,9 @@ export default function CreateBillScreen({ route, navigation }) {
                     {sel && (
                       <View style={styles.qtyContainer}>
                         <Text style={styles.qtyLabel}>Qty:</Text>
-                        <TextInput
+                        <TextInput accessibilityLabel="Qty:"
                           style={styles.qtyInput}
-                          value={String(sel.quantity || 1)}
+                          value={String(sel.quantity ?? '')}
                           onChangeText={(v) => updateQty(pi.name, v)}
                           keyboardType="numeric"
                         />
@@ -294,7 +297,7 @@ export default function CreateBillScreen({ route, navigation }) {
             <View style={styles.discAdvRow}>
               <View style={{ flex: 1, marginRight: 8 }}>
                 <Text style={styles.inputLabel}>Discount (₹)</Text>
-                <TextInput
+                <TextInput accessibilityLabel="Discount (₹)"
                   style={styles.input}
                   placeholder="0"
                   value={discount}
@@ -304,7 +307,7 @@ export default function CreateBillScreen({ route, navigation }) {
               </View>
               <View style={{ flex: 1, marginLeft: 8 }}>
                 <Text style={styles.inputLabel}>Advance Received (₹)</Text>
-                <TextInput
+                <TextInput accessibilityLabel="Advance Received (₹)"
                   style={styles.input}
                   placeholder="0"
                   value={advance}
@@ -342,19 +345,13 @@ export default function CreateBillScreen({ route, navigation }) {
                   ₹{balance}
                 </Text>
               </View>
-              {isAdmin && (
-                <View style={[styles.calcRow, { backgroundColor: '#e8f5e9', padding: 6, borderRadius: 6, marginTop: 4 }]}>
-                  <Text style={{ fontWeight: 'bold', color: COLORS.success }}>Estimated profit:</Text>
-                  <Text style={{ fontWeight: 'bold', color: COLORS.success }}>+₹{profit}</Text>
-                </View>
-              )}
             </View>
 
             <View style={styles.navRow}>
-              <TouchableOpacity style={styles.prevBtn} onPress={() => setStep(1)}>
+              <TouchableOpacity accessibilityRole="button" style={styles.prevBtn} onPress={() => setStep(1)}>
                 <Text style={styles.prevBtnText}>← Back</Text>
               </TouchableOpacity>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={[styles.nextBtn, items.length === 0 && styles.disabledBtn]}
                 onPress={() => {
                   if (items.length === 0) {
@@ -377,7 +374,7 @@ export default function CreateBillScreen({ route, navigation }) {
             <Text style={styles.stepDesc}>Review the agreement before sharing.</Text>
 
             <Text style={styles.fieldLabel}>Agreement</Text>
-            <TextInput
+            <TextInput accessibilityLabel="Agreement"
               style={[styles.input, { height: 90 }]}
               multiline
               value={agreementText}
@@ -389,29 +386,29 @@ export default function CreateBillScreen({ route, navigation }) {
               <View key={idx} style={styles.termRow}>
                 <Text style={styles.termNum}>{idx + 1}.</Text>
                 <Text style={styles.termText}>{t}</Text>
-                <TouchableOpacity onPress={() => removeTerm(idx)}>
+                <TouchableOpacity accessibilityRole="button" onPress={() => removeTerm(idx)}>
                   <Text style={styles.termDel}>×</Text>
                 </TouchableOpacity>
               </View>
             ))}
 
             <View style={styles.addTermRow}>
-              <TextInput
+              <TextInput accessibilityLabel="×"
                 style={[styles.input, { flex: 1, marginBottom: 0 }]}
                 placeholder="New term"
                 value={newTerm}
                 onChangeText={setNewTerm}
               />
-              <TouchableOpacity style={styles.addTermBtn} onPress={addTerm}>
+              <TouchableOpacity accessibilityRole="button" style={styles.addTermBtn} onPress={addTerm}>
                 <Text style={styles.addTermBtnText}>+ Add</Text>
               </TouchableOpacity>
             </View>
 
             <View style={styles.navRow}>
-              <TouchableOpacity style={styles.prevBtn} onPress={() => setStep(2)}>
+              <TouchableOpacity accessibilityRole="button" style={styles.prevBtn} onPress={() => setStep(2)}>
                 <Text style={styles.prevBtnText}>← Back</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.nextBtn} onPress={() => setStep(4)}>
+              <TouchableOpacity accessibilityRole="button" style={styles.nextBtn} onPress={() => setStep(4)}>
                 <Text style={styles.nextBtnText}>Next: Review →</Text>
               </TouchableOpacity>
             </View>
@@ -421,7 +418,7 @@ export default function CreateBillScreen({ route, navigation }) {
         {/* STEP 4: REVIEW */}
         {step === 4 && (
           <View style={styles.stepContent}>
-            <Text style={styles.stepTitle}>Step 4: Review & Generate</Text>
+            <Text style={styles.stepTitle}>Review & assign</Text>
             <Text style={styles.stepDesc}>Check the details before saving.</Text>
 
             <View style={styles.reviewCard}>
@@ -440,11 +437,20 @@ export default function CreateBillScreen({ route, navigation }) {
                   <Text style={styles.reviewItemName}>
                     {i.name} <Text style={{ color: COLORS.subtext }}>({i.quantity} × {i.unit})</Text>
                   </Text>
-                  <Text style={styles.reviewItemPrice}>₹{i.sellingPrice * i.quantity}</Text>
+                  <Text style={styles.reviewItemPrice}>₹{(i.sellingPrice * i.quantity).toFixed(2)}</Text>
                 </View>
               ))}
             </View>
 
+            <View style={styles.reviewCard}>
+              <Text style={styles.reviewHeading}>ASSIGN SERVICES</Text>
+              <Text style={{color:COLORS.subtext,fontSize:13,lineHeight:20,marginBottom:18}}>Each assigned service adds its full amount to the user’s pending wallet. Delivery moves it to their main balance.</Text>
+              {items.map((item,index)=><View key={item._id || item.name} style={{marginBottom:12}}>
+                <SelectField label={item.name+' · ₹'+(item.sellingPrice*Number(item.quantity)).toFixed(2)} value={item.assignedTo || ''} disabled={item.deliveryStatus==='delivered'} options={[{label:'Unassigned',value:''},...staff.map(member=>({label:member.label||member.name,value:member._id}))]} onChange={assignedTo=>setItems(current=>current.map((entry,i)=>i===index?{...entry,assignedTo:assignedTo || null}:entry))}/>
+                {item.deliveryStatus==='delivered'&&<Text style={{fontSize:12,color:COLORS.subtext}}>Reopen delivery on the invoice before reassigning this service.</Text>}
+              </View>)}
+              <Text style={{fontSize:12,color:COLORS.subtext}}>Wallet amounts use the service total before bill-level discounts.</Text>
+            </View>
             <View style={styles.reviewCard}>
               <Text style={styles.reviewHeading}>TOTALS</Text>
               <View style={styles.reviewItemRow}>
@@ -473,19 +479,13 @@ export default function CreateBillScreen({ route, navigation }) {
                   ₹{balance}
                 </Text>
               </View>
-              {isAdmin && (
-                <View style={[styles.reviewItemRow, { backgroundColor: '#e8f5e9', padding: 6, borderRadius: 6, marginTop: 4 }]}>
-                  <Text style={{ fontWeight: 'bold', color: COLORS.success }}>Net Profit [Admin Only]</Text>
-                  <Text style={{ fontWeight: 'bold', color: COLORS.success }}>+₹{profit}</Text>
-                </View>
-              )}
             </View>
 
             <View style={styles.navRow}>
-              <TouchableOpacity style={styles.prevBtn} onPress={() => setStep(3)}>
+              <TouchableOpacity accessibilityRole="button" style={styles.prevBtn} onPress={() => setStep(3)}>
                 <Text style={styles.prevBtnText}>← Back</Text>
               </TouchableOpacity>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={styles.createBtn}
                 onPress={submitBill}
                 disabled={saving}
@@ -504,12 +504,12 @@ export default function CreateBillScreen({ route, navigation }) {
       </ScrollView>
 
       {/* Client Picker Modal */}
-      <Modal visible={clientModal} animationType="slide" transparent>
+      <Modal visible={clientModal} animationType="fade" transparent onRequestClose={()=>setClientModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Select Client</Text>
-              <TouchableOpacity onPress={() => setClientModal(false)}>
+              <TouchableOpacity accessibilityRole="button" onPress={() => setClientModal(false)}>
                 <Text style={styles.closeIcon}>×</Text>
               </TouchableOpacity>
             </View>
@@ -519,7 +519,7 @@ export default function CreateBillScreen({ route, navigation }) {
               keyExtractor={(i) => i._id}
               contentContainerStyle={{ padding: 16 }}
               renderItem={({ item }) => (
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={styles.clientPickRow}
                   onPress={() => {
                     setSelectedClient(item);
@@ -591,12 +591,12 @@ const styles = createStyles({
   stepDesc: { fontSize: 13, color: COLORS.subtext, marginBottom: 16 },
   selectedClientCard: {
     flexDirection: 'row',
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     borderRadius: 12,
     padding: 16,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
     marginBottom: 20,
   },
   avatar: {
@@ -618,7 +618,7 @@ const styles = createStyles({
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
   changeBtnText: { color: COLORS.primary, fontWeight: 'bold', fontSize: 12 },
   selectClientBtn: {
@@ -645,7 +645,7 @@ const styles = createStyles({
     borderWidth: 1,
     borderColor: '#eee',
   },
-  piSelected: { borderColor: COLORS.primary, backgroundColor: '#edf2ff' },
+  piSelected: { borderColor: COLORS.primary, backgroundColor: '#eff0e8' },
   piLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   checkbox: {
     width: 22,

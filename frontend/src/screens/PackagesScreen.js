@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
-  Modal, TextInput, ActivityIndicator, ScrollView,
+  Modal, TextInput, ActivityIndicator, ScrollView, Switch,
 } from 'react-native';
 import api from '../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 import { totals, serviceCost } from '../utils/pricing';
 import { useAuth } from '../context/AuthContext';
 import { confirmDialog, notify } from '../utils/dialog';
@@ -18,7 +20,7 @@ export default function PackagesScreen({ navigation }) {
   const [modalVisible, setModalVisible] = useState(false);
   const [editing, setEditing] = useState(null);
   const [priceItems, setPriceItems] = useState([]);
-  const [form, setForm] = useState({ name: '', description: '', items: [] });
+  const [form, setForm] = useState({ name: '', description: '', items: [], isPublic:false });
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState('');
 
@@ -38,13 +40,13 @@ export default function PackagesScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll]));
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: '', description: '', items: [] });
+    setForm({ name: '', description: '', items: [], isPublic:false });
     setFormError('');
     setModalVisible(true);
   };
@@ -60,6 +62,7 @@ export default function PackagesScreen({ navigation }) {
       costPrice: i.costPrice || 0,
     }));
     setForm({
+      isPublic: !!pkg.isPublic,
       name: pkg.name || '',
       description: pkg.description || '',
       items: existingItems,
@@ -91,14 +94,9 @@ export default function PackagesScreen({ navigation }) {
     }
   };
 
-  const updateQty = (priceItemId, qtyStr) => {
-    const qty = Number(qtyStr);
-    setForm({
-      ...form,
-      items: form.items.map((i) =>
-        i.priceItem === priceItemId ? { ...i, quantity: !Number.isFinite(qty) || qty <= 0 ? 1 : qty } : i
-      ),
-    });
+  const updateQty = (priceItemId, value) => {
+    if (!/^\d*\.?\d*$/.test(value)) return;
+    setForm(current=>({...current,items:current.items.map(item=>item.priceItem===priceItemId?{...item,quantity:value}:item)}));
   };
 
   const calculation = totals(form.items);
@@ -117,12 +115,14 @@ export default function PackagesScreen({ navigation }) {
       return;
     }
 
+    if (form.items.some(item=>!Number.isFinite(Number(item.quantity)) || Number(item.quantity)<=0)) {setFormError('Enter a positive quantity for each service');return;}
     setSaving(true);
     try {
       const payload = {
         name,
         description: form.description.trim(),
         items: form.items,
+        isPublic:form.isPublic,
       };
 
       if (editing) {
@@ -189,18 +189,18 @@ export default function PackagesScreen({ navigation }) {
 
       {/* CRUD Actions */}
       <View style={styles.cardActions}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.useBillBtn}
           onPress={() => navigation.navigate('CreateBill', { packageData: item })}
         >
           <Text style={styles.useBillText}>Create Bill</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.editBtn} onPress={() => openEdit(item)}>
+        <TouchableOpacity accessibilityRole="button" style={styles.editBtn} onPress={() => openEdit(item)}>
           <Text style={styles.editBtnText}>Edit</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(item)}>
+        <TouchableOpacity accessibilityRole="button" style={styles.delBtn} onPress={() => handleDelete(item)}>
           <Text style={styles.delBtnText}>Delete</Text>
         </TouchableOpacity>
       </View>
@@ -211,14 +211,14 @@ export default function PackagesScreen({ navigation }) {
     <View style={styles.container}>
       {/* Top Bar */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
-        <View>
+        <View style={{flex:1,minWidth:140}}>
           <Text style={styles.heading}>Packages</Text>
           <Text style={styles.subheading}>Create & bundle photography packages</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
+        <TouchableOpacity accessibilityRole="button" style={styles.addBtn} onPress={openCreate}>
           <Text style={styles.addBtnText}>+ New Package</Text>
         </TouchableOpacity>
       </View>
@@ -238,7 +238,7 @@ export default function PackagesScreen({ navigation }) {
             <View style={styles.empty}>
               
               <Text style={styles.emptyText}>No packages created yet.</Text>
-              <TouchableOpacity style={styles.emptyAddBtn} onPress={openCreate}>
+              <TouchableOpacity accessibilityRole="button" style={styles.emptyAddBtn} onPress={openCreate}>
                 <Text style={styles.emptyAddBtnText}>+ Create Your First Package</Text>
               </TouchableOpacity>
             </View>
@@ -247,12 +247,12 @@ export default function PackagesScreen({ navigation }) {
       )}
 
       {/* Create / Edit Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editing ? 'Edit Package' : 'Create New Package'}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close dialog" onPress={() => setModalVisible(false)}>
                 <Text style={styles.closeIcon}>×</Text>
               </TouchableOpacity>
             </View>
@@ -265,14 +265,14 @@ export default function PackagesScreen({ navigation }) {
               ) : null}
 
               <Text style={styles.fieldLabel}>Package Name *</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Package Name *"
                 style={styles.input}
                                 value={form.name}
                 onChangeText={(v) => { setForm({ ...form, name: v }); setFormError(''); }}
               />
 
               <Text style={styles.fieldLabel}>Package Description</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Package Description"
                 style={styles.input}
                 placeholder=""
                 value={form.description}
@@ -289,7 +289,7 @@ export default function PackagesScreen({ navigation }) {
                   const selected = form.items.find((i) => i.priceItem === pi._id);
                   return (
                     <View key={pi._id} style={[styles.piRow, selected && styles.piSelected]}>
-                      <TouchableOpacity style={styles.piLeft} onPress={() => toggleItem(pi)}>
+                      <TouchableOpacity accessibilityRole="button" style={styles.piLeft} onPress={() => toggleItem(pi)}>
                         <View style={[styles.checkbox, selected && styles.checkboxChecked]}>
                           {selected && <Text style={{ color: '#fff', fontWeight: 'bold' }}>✓</Text>}
                         </View>
@@ -302,9 +302,9 @@ export default function PackagesScreen({ navigation }) {
                       {selected && (
                         <View style={styles.qtyContainer}>
                           <Text style={styles.qtyLabel}>Qty:</Text>
-                          <TextInput
+                          <TextInput accessibilityLabel="Qty:"
                             style={styles.qtyInput}
-                            value={String(selected.quantity || 1)}
+                            value={String(selected.quantity ?? '')}
                             onChangeText={(v) => updateQty(pi._id, v)}
                             keyboardType="numeric"
                           />
@@ -330,11 +330,12 @@ export default function PackagesScreen({ navigation }) {
                 </View>
               )}
 
+              <View style={{flexDirection:'row',gap:16,alignItems:'center',marginVertical:18}}><Switch accessibilityLabel="Show on studio page" value={form.isPublic} onValueChange={isPublic=>setForm({...form,isPublic})} trackColor={{true:COLORS.primary}} /><View style={{flex:1}}><Text style={styles.fieldLabel}>Show on studio page</Text><Text style={{color:COLORS.subtext,fontSize:12}}>Clients can view this package and estimate a budget.</Text></View></View>
               <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <TouchableOpacity accessibilityRole="button" style={styles.cancelBtn} accessibilityLabel="Close dialog" onPress={() => setModalVisible(false)}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={save} disabled={saving}>
+                <TouchableOpacity accessibilityRole="button" style={styles.saveBtn} onPress={save} disabled={saving}>
                   {saving ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
@@ -435,14 +436,14 @@ const styles = createStyles({
   useBillText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
   editBtn: {
     flex: 1,
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     borderRadius: 8,
     paddingVertical: 9,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
-  editBtnText: { color: '#2459d3', fontWeight: '600', fontSize: 13 },
+  editBtnText: { color: '#4e5941', fontWeight: '600', fontSize: 13 },
   delBtn: {
     flex: 1,
     backgroundColor: '#fff5f5',
@@ -512,7 +513,7 @@ const styles = createStyles({
     fontSize: 14,
     backgroundColor: '#fafafa',
   },
-  noPriceWarning: { color: '#b85e19', fontSize: 13, marginVertical: 8 },
+  noPriceWarning: { color: '#946546', fontSize: 13, marginVertical: 8 },
   piRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -523,7 +524,7 @@ const styles = createStyles({
     borderWidth: 1,
     borderColor: '#eee',
   },
-  piSelected: { borderColor: COLORS.primary, backgroundColor: '#edf2ff' },
+  piSelected: { borderColor: COLORS.primary, backgroundColor: '#eff0e8' },
   piLeft: { flex: 1, flexDirection: 'row', alignItems: 'center' },
   checkbox: {
     width: 22,
@@ -557,7 +558,7 @@ const styles = createStyles({
     padding: 14,
     marginVertical: 14,
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
   totalRow: { flexDirection: 'row', justifyContent: 'space-between', marginVertical: 2 },
   totalLabel: { fontSize: 15, fontWeight: 'bold', color: COLORS.primary },

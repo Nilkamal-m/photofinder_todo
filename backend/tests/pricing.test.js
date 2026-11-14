@@ -19,3 +19,10 @@ test('decimal quantities, discounts, advances and rounding stay consistent',()=>
  assert.equal(totals([{sellingPrice:10,quantity:1}],100,100).balance,0);
  assert.equal(totals([{sellingPrice:0.1,quantity:3}]).total,0.3);
 });
+test('rounded service lines add up to the displayed total',()=>{
+ const calculation=totals([{sellingPrice:0.01,quantity:0.5},{sellingPrice:0.01,quantity:0.5}]);
+ assert.equal(calculation.subtotal,0.02);
+ const {calculateService}=require('../utils/servicePricing');
+ const priced=calculateService({costComponents:[{name:'Cost',amount:10000}],profitMode:'percent',profitValue:0.005});
+ assert.equal(priced.sellingPrice,10000.5);assert.equal(calculateService({},priced).sellingPrice,priced.sellingPrice);
+});

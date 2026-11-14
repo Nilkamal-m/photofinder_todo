@@ -1,24 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
   Modal, TextInput, ActivityIndicator,
 } from 'react-native';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 import { confirmDialog, notify } from '../utils/dialog';
 
 import { COLORS, createStyles } from '../design/system';
 
 const statusColors = {
   draft: '#757575',
-  sent: '#2459d3',
+  sent: '#4e5941',
   paid: '#2e7d32',
   cancelled: '#d32f2f',
 };
 
 export default function BillsScreen({ navigation }) {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
   const [bills, setBills] = useState([]);
   const [loading, setLoading] = useState(true);
   const [shareModal, setShareModal] = useState(null);
@@ -38,9 +37,9 @@ export default function BillsScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchBills();
-  }, [fetchBills]);
+  }, [fetchBills]));
 
   const openShare = (bill) => {
     setShareModal(bill);
@@ -111,12 +110,6 @@ export default function BillsScreen({ navigation }) {
             ₹{item.balanceDue}
           </Text>
         </View>
-        {isAdmin && (
-          <View style={styles.amtCol}>
-            <Text style={styles.amtLabel}>Profit [Admin]</Text>
-            <Text style={[styles.amtValue, { color: COLORS.success }]}>₹{item.profit}</Text>
-          </View>
-        )}
       </View>
 
       {item.sharedWithPhone ? (
@@ -129,25 +122,25 @@ export default function BillsScreen({ navigation }) {
 
       {/* CRUD Actions */}
       <View style={styles.cardActions}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.viewBtn}
           onPress={() => navigation.navigate('BillDetail', { billId: item._id })}
         >
           <Text style={styles.viewBtnText}>View</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.editBtn}
           onPress={() => navigation.navigate('CreateBill', { editBillId: item._id })}
         >
           <Text style={styles.editBtnText}>Edit</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.shareBtn} onPress={() => openShare(item)}>
+        <TouchableOpacity accessibilityRole="button" style={styles.shareBtn} onPress={() => openShare(item)}>
           <Text style={styles.shareBtnText}>Share</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(item)}>
+        <TouchableOpacity accessibilityRole="button" style={styles.delBtn} onPress={() => handleDelete(item)}>
           <Text style={styles.delBtnText}>Delete</Text>
         </TouchableOpacity>
       </View>
@@ -157,14 +150,14 @@ export default function BillsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
-        <View>
+        <View style={{flex:1,minWidth:140}}>
           <Text style={styles.heading}>Bills & Agreements</Text>
           <Text style={styles.subheading}>Generate, customize agreements & share bills</Text>
         </View>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.addBtn}
           onPress={() => navigation.navigate('CreateBill', {})}
         >
@@ -187,7 +180,7 @@ export default function BillsScreen({ navigation }) {
             <View style={styles.empty}>
               
               <Text style={styles.emptyText}>No bills generated yet.</Text>
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={styles.emptyAddBtn}
                 onPress={() => navigation.navigate('CreateBill', {})}
               >
@@ -204,7 +197,7 @@ export default function BillsScreen({ navigation }) {
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Share Bill & Agreement</Text>
-              <TouchableOpacity onPress={() => setShareModal(null)}>
+              <TouchableOpacity accessibilityRole="button" onPress={() => setShareModal(null)}>
                 <Text style={styles.closeIcon}>×</Text>
               </TouchableOpacity>
             </View>
@@ -215,11 +208,11 @@ export default function BillsScreen({ navigation }) {
                 <Text style={{ fontWeight: 'bold' }}>{shareModal?.client?.name}</Text>.
               </Text>
               <Text style={styles.shareNote}>
-                Security Guarantee: Only the recipient phone number entered below will be permitted to unlock and view the bill & agreement!
+                The recipient enters this phone number to view the invoice.
               </Text>
 
               <Text style={styles.fieldLabel}>Client Phone Number *</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Client Phone Number *"
                 style={styles.input}
                                 value={sharePhone}
                 onChangeText={setSharePhone}
@@ -228,11 +221,11 @@ export default function BillsScreen({ navigation }) {
 
               {shareResult && (
                 <View style={styles.resultBox}>
-                  <Text style={styles.resultTitle}>Bill Shared Successfully!</Text>
-                  <Text style={styles.resultSub}>Share Link (Phone-Gated):</Text>
-                  <TextInput
+                  <Text style={styles.resultTitle}>Share link ready</Text>
+                  <Text style={styles.resultSub}>Invoice link</Text>
+                  <TextInput accessibilityLabel="Invoice link"
                     style={styles.linkBox}
-                    value={`http://localhost:8085/?token=${shareResult.shareToken}&phone=${sharePhone}`}
+                    value={shareResult.shareUrl}
                     editable={false}
                     selectTextOnFocus
                   />
@@ -243,10 +236,10 @@ export default function BillsScreen({ navigation }) {
               )}
 
               <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setShareModal(null)}>
+                <TouchableOpacity accessibilityRole="button" style={styles.cancelBtn} onPress={() => setShareModal(null)}>
                   <Text style={styles.cancelBtnText}>Close</Text>
                 </TouchableOpacity>
-                <TouchableOpacity
+                <TouchableOpacity accessibilityRole="button"
                   style={styles.confirmShareBtn}
                   onPress={handleShare}
                   disabled={sharing}
@@ -254,7 +247,7 @@ export default function BillsScreen({ navigation }) {
                   {sharing ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.confirmShareBtnText}>Share with Number</Text>
+                    <Text style={styles.confirmShareBtnText}>Create share link</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -327,12 +320,12 @@ const styles = createStyles({
   amtLabel: { fontSize: 11, color: COLORS.subtext, textTransform: 'uppercase' },
   amtValue: { fontSize: 15, fontWeight: 'bold', color: COLORS.text, marginTop: 2 },
   sharedInfoBox: {
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     borderRadius: 6,
     padding: 8,
     marginVertical: 6,
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
   sharedInfoText: { fontSize: 12, color: COLORS.primary },
   cardActions: {
@@ -343,14 +336,14 @@ const styles = createStyles({
   },
   viewBtn: {
     flex: 1.2,
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     borderRadius: 8,
     paddingVertical: 9,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
-  viewBtnText: { color: '#2459d3', fontWeight: 'bold', fontSize: 13 },
+  viewBtnText: { color: '#4e5941', fontWeight: 'bold', fontSize: 13 },
   editBtn: {
     flex: 1,
     backgroundColor: '#fafafa',

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   ActivityIndicator,
   FlatList,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import api from '../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 import { notify } from '../utils/dialog';
 
 import { COLORS, createStyles } from '../design/system';
@@ -43,13 +45,11 @@ export default function DatesScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
-    loadEntries();
-  }, [loadEntries]);
+  useFocusEffect(useCallback(() => {loadEntries();},[loadEntries]));
 
   const validateDate = () => {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
-      notify('Invalid date', 'Use the YYYY-MM-DD format, for example 2026-12-25.');
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0,10) !== date) {
+      notify('Invalid date', 'Enter a valid date in YYYY-MM-DD format.');
       return false;
     }
     return true;
@@ -115,7 +115,7 @@ export default function DatesScreen({ navigation }) {
         {isClientBooking ? (
           <Text style={styles.autoBooking}>Client booking</Text>
         ) : (
-          <TouchableOpacity onPress={() => unblockDate(item)} style={styles.unblockButton}>
+          <TouchableOpacity accessibilityRole="button" onPress={() => unblockDate(item)} style={styles.unblockButton}>
             <Text style={styles.unblockText}>Unblock</Text>
           </TouchableOpacity>
         )}
@@ -126,8 +126,8 @@ export default function DatesScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Text style={styles.backText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" onPress={() => navigation.goBack()} accessibilityLabel="Back" style={styles.backButton}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
         <View style={styles.topBarTitle}>
           <Text style={styles.heading}>Important Dates</Text>
@@ -140,14 +140,14 @@ export default function DatesScreen({ navigation }) {
           <Text style={styles.sectionTitle}>Check a date</Text>
           <Text style={styles.helper}>Enter a date to see whether it is free, booked, or blocked.</Text>
           <View style={styles.inlineRow}>
-            <TextInput
+            <TextInput accessibilityLabel="Enter a date to see whether it is free, booked, or blocked."
               style={[styles.input, styles.dateInput]}
               placeholder="YYYY-MM-DD"
               value={date}
-              onChangeText={setDate}
+              onChangeText={value => {setDate(value);setCheckResult(null);}}
               autoCapitalize="none"
             />
-            <TouchableOpacity style={styles.primaryButton} onPress={checkDate} disabled={checking}>
+            <TouchableOpacity accessibilityRole="button" style={styles.primaryButton} onPress={checkDate} disabled={checking}>
               {checking ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Check</Text>}
             </TouchableOpacity>
           </View>
@@ -163,7 +163,7 @@ export default function DatesScreen({ navigation }) {
 
           <View style={styles.divider} />
           <Text style={styles.sectionTitle}>Mark an important date</Text>
-          <TextInput
+          <TextInput accessibilityLabel="Mark an important date"
             style={styles.input}
             placeholder="Reason or event name"
             value={title}
@@ -171,7 +171,7 @@ export default function DatesScreen({ navigation }) {
           />
           <View style={styles.typeRow}>
             {TYPES.map((option) => (
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 key={option.value}
                 style={[styles.typeButton, type === option.value && styles.typeButtonActive]}
                 onPress={() => setType(option.value)}
@@ -189,7 +189,7 @@ export default function DatesScreen({ navigation }) {
             onChangeText={setNotes}
             multiline
           />
-          <TouchableOpacity style={styles.saveButton} onPress={blockDate} disabled={saving}>
+          <TouchableOpacity accessibilityRole="button" style={styles.saveButton} onPress={blockDate} disabled={saving}>
             {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.primaryButtonText}>Save date</Text>}
           </TouchableOpacity>
         </View>

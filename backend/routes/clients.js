@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Client = require('../models/Client');
+const Bill = require('../models/Bill');
 const { protect } = require('../middleware/auth');
 
 // Get all clients
@@ -49,7 +50,7 @@ router.post('/', protect, async (req, res) => {
 // Update client
 router.put('/:id', protect, async (req, res) => {
   try {
-    const updateData = { ...req.body };
+    const updateData = Object.fromEntries(['name','phone','email','address','eventType','eventDate','eventVenue','notes'].filter(key => req.body[key] !== undefined).map(key => [key,req.body[key]]));
     if (updateData.name) updateData.name = updateData.name.trim();
     if (updateData.phone) updateData.phone = updateData.phone.trim();
 
@@ -68,6 +69,7 @@ router.put('/:id', protect, async (req, res) => {
 // Delete client
 router.delete('/:id', protect, async (req, res) => {
   try {
+    if (await Bill.exists({client:req.params.id,createdBy:req.user._id})) return res.status(400).json({message:'This client has saved bills. Keep their record to preserve the invoices.'});
     const client = await Client.findOneAndDelete({ _id: req.params.id, createdBy: req.user._id });
     if (!client) return res.status(404).json({ message: 'Client not found' });
     res.json({ message: 'Client deleted successfully' });

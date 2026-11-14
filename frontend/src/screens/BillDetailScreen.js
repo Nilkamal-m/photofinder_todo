@@ -1,26 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator,
+  ActivityIndicator, useWindowDimensions,
 } from 'react-native';
 import api from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useFocusEffect } from '@react-navigation/native';
 import { confirmDialog, notify } from '../utils/dialog';
 
 import { COLORS, createStyles } from '../design/system';
 
 export default function BillDetailScreen({ route, navigation }) {
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
+  const compact = useWindowDimensions().width < 600;
   const { billId } = route.params;
   const [bill, setBill] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [staff,setStaff]=useState([]);
+  const [updating,setUpdating]=useState(false);
+  const updateStatus=async status=>{setUpdating(true);try{const {data}=await api.put(`/bills/${billId}`,{status,...(status==='paid'?{advancePaid:bill.totalAmount}:{})});setBill(data);}catch(e){notify('Unable to update',e.response?.data?.message || 'Please try again');}finally{setUpdating(false);}};
 
+  const setDelivery=async(item,status)=>{setUpdating(true);try{const {data}=await api.put(`/bills/${billId}/items/${item._id}/delivery`,{deliveryStatus:status});setBill(data);}catch(e){notify('Unable to update delivery',e.response?.data?.message || 'Try again');}finally{setUpdating(false);}};
   const fetchBill = async () => {
     try {
       setLoading(true);
       const { data } = await api.get(`/bills/${billId}`);
       setBill(data);
+      setStaff((await api.get('/team/users')).data);
     } catch (err) {
       notify('Error', 'Failed to load bill details');
     } finally {
@@ -28,9 +33,7 @@ export default function BillDetailScreen({ route, navigation }) {
     }
   };
 
-  useEffect(() => {
-    fetchBill();
-  }, [billId]);
+  useFocusEffect(useCallback(() => { fetchBill(); }, [billId]));
 
   const handleDelete = () => {
     confirmDialog(
@@ -61,8 +64,8 @@ export default function BillDetailScreen({ route, navigation }) {
     return (
       <View style={styles.centerContainer}>
         <Text style={styles.emptyText}>Bill not found</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Go Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
       </View>
     );
@@ -72,32 +75,37 @@ export default function BillDetailScreen({ route, navigation }) {
     <View style={styles.container}>
       {/* Top Header */}
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
         <Text style={styles.topBarTitle}>Invoice #{bill.billNumber}</Text>
         <View style={styles.topBarActions}>
-          <TouchableOpacity
+          <TouchableOpacity accessibilityRole="button"
             style={styles.editBtn}
             onPress={() => navigation.navigate('CreateBill', { editBillId: bill._id })}
           >
             <Text style={styles.editBtnText}>Edit</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.delBtn} onPress={handleDelete}>
+          <TouchableOpacity accessibilityRole="button" style={styles.delBtn} onPress={handleDelete}>
             <Text style={styles.delBtnText}>Delete</Text>
           </TouchableOpacity>
         </View>
       </View>
 
       <ScrollView style={styles.scrollArea} contentContainerStyle={styles.scrollContent}>
+        <View style={{flexDirection:'row',flexWrap:'wrap',gap:10,marginBottom:24}}>
+          {bill.status !== 'paid' && bill.status !== 'cancelled' && <TouchableOpacity accessibilityRole="button" disabled={updating} style={styles.editBtn} onPress={()=>confirmDialog('Record full payment','Confirm that the full invoice amount has been received.',()=>updateStatus('paid'))}><Text style={styles.editBtnText}>Mark as paid</Text></TouchableOpacity>}
+          {bill.status !== 'cancelled' && <TouchableOpacity accessibilityRole="button" disabled={updating} style={styles.delBtn} onPress={()=>confirmDialog('Cancel bill','This will exclude its costs from team earnings.',()=>updateStatus('cancelled'))}><Text style={styles.delBtnText}>Cancel bill</Text></TouchableOpacity>}
+          {bill.status === 'cancelled' && <TouchableOpacity accessibilityRole="button" disabled={updating} style={styles.editBtn} onPress={()=>updateStatus('draft')}><Text style={styles.editBtnText}>Reopen bill</Text></TouchableOpacity>}
+        </View>
         {/* Printable Invoice Header */}
-        <View style={styles.invoiceHeader}>
+        <View style={[styles.invoiceHeader,compact&&{flexDirection:'column',gap:18}]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.brandName}>PhotoFinder Studio</Text>
             <Text style={styles.brandSub}>Professional Photography & Cinematic Videography</Text>
             <Text style={styles.brandMeta}>Invoice / Agreement Document</Text>
           </View>
-          <View style={styles.invoiceMetaRight}>
+          <View style={[styles.invoiceMetaRight,compact&&{alignItems:'flex-start'}]}>
             <Text style={styles.invoiceNumber}>#{bill.billNumber}</Text>
             <Text style={styles.invoiceDate}>{new Date(bill.createdAt).toLocaleDateString()}</Text>
             <View style={styles.statusPill}>
@@ -162,11 +170,19 @@ export default function BillDetailScreen({ route, navigation }) {
               </View>
               <Text style={styles.colQty}>{item.quantity}</Text>
               <Text style={styles.colRate}>₹{item.sellingPrice}</Text>
-              <Text style={styles.colTotal}>₹{item.sellingPrice * item.quantity}</Text>
+              <Text style={styles.colTotal}>₹{(item.lineTotal ?? item.sellingPrice * item.quantity).toFixed(2)}</Text>
             </View>
           ))}
         </View>
 
+        <View style={styles.sectionCard}>
+          <Text style={styles.sectionHeader}>SERVICE DELIVERY · INTERNAL</Text>
+          {bill.items.map(item=><View key={item._id} style={{borderBottomWidth:1,borderColor:COLORS.border,paddingVertical:16}}>
+            <Text style={styles.itemTitle}>{item.name}</Text>
+            <Text style={{fontSize:13,color:COLORS.subtext,lineHeight:21,marginTop:6}}>{staff.find(member=>member._id===item.assignedTo)?.label || 'Unassigned'} · {item.deliveryStatus==='delivered'?'Delivered · settled':'Awaiting delivery · pending'} · ₹{Number(item.lineTotal).toFixed(2)}</Text>
+            <TouchableOpacity accessibilityRole="button" disabled={updating || bill.status==='cancelled'} style={[styles.editBtn,{alignSelf:'flex-start',marginTop:12}]} onPress={()=>confirmDialog(item.deliveryStatus==='delivered'?'Reopen delivery':'Confirm delivery',item.deliveryStatus==='delivered'?'Move this service amount back to the pending wallet?':'Mark this service fully delivered and move its amount to the settled wallet?',()=>setDelivery(item,item.deliveryStatus==='delivered'?'pending':'delivered'))}><Text style={styles.editBtnText}>{item.deliveryStatus==='delivered'?'Reopen delivery':'Mark delivered'}</Text></TouchableOpacity>
+          </View>)}
+        </View>
         {/* Bill Summary */}
         <View style={styles.sectionCard}>
           <Text style={styles.sectionHeader}>PAYMENT SUMMARY</Text>
@@ -193,12 +209,6 @@ export default function BillDetailScreen({ route, navigation }) {
             <Text style={styles.balanceVal}>₹{bill.balanceDue}</Text>
           </View>
 
-          {isAdmin && (
-            <View style={styles.adminProfitBox}>
-              <Text style={styles.adminProfitLabel}>Net Studio Profit [Admin Visible Only]:</Text>
-              <Text style={styles.adminProfitVal}>+₹{bill.profit}</Text>
-            </View>
-          )}
         </View>
 
         {/* Agreement Text & Terms */}
@@ -262,14 +272,14 @@ const styles = createStyles({
   topBarTitle: { color: COLORS.text, fontSize: 17, fontWeight: 'bold' },
   topBarActions: { flexDirection: 'row', gap: 8 },
   editBtn: {
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
-  editBtnText: { color: '#2459d3', fontWeight: 'bold', fontSize: 13 },
+  editBtnText: { color: '#4e5941', fontWeight: 'bold', fontSize: 13 },
   delBtn: {
     backgroundColor: '#fff5f5',
     paddingHorizontal: 10,
@@ -290,7 +300,7 @@ const styles = createStyles({
     paddingBottom: 20,
     marginBottom: 20,
     borderBottomWidth: 2,
-    borderBottomColor: '#2459d3',
+    borderBottomColor: '#4e5941',
   },
   brandName: { fontSize: 22, fontWeight: 'bold', color: COLORS.primary },
   brandSub: { fontSize: 13, color: COLORS.subtext, marginTop: 2 },
@@ -363,17 +373,6 @@ const styles = createStyles({
   },
   balanceLabel: { fontSize: 14, fontWeight: 'bold', color: COLORS.error },
   balanceVal: { fontSize: 15, fontWeight: 'bold', color: COLORS.error },
-  adminProfitBox: {
-    backgroundColor: '#e8f5e9',
-    padding: 10,
-    borderRadius: 6,
-    marginTop: 10,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  adminProfitLabel: { fontSize: 13, fontWeight: 'bold', color: COLORS.success },
-  adminProfitVal: { fontSize: 15, fontWeight: 'bold', color: COLORS.success },
   agreementBody: { fontSize: 13, color: COLORS.text, lineHeight: 20 },
   termRow: { flexDirection: 'row', marginVertical: 3 },
   termNum: { width: 22, fontSize: 12, fontWeight: 'bold', color: COLORS.primary },

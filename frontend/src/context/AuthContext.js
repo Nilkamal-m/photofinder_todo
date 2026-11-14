@@ -17,7 +17,15 @@ export const AuthProvider = ({ children }) => {
       const token = await AsyncStorage.getItem('token');
       const userStr = await AsyncStorage.getItem('user');
       if (token && userStr) {
-        setUser(JSON.parse(userStr));
+        try {
+          const {data}=await api.get('/auth/me');
+          if (!data.user) throw new Error('Account not found');
+          setUser(data.user);
+        } catch(err) {
+          if (err.response?.status===401 || !err.response) {
+            await AsyncStorage.multiRemove(['token','user']);
+          }
+        }
       }
     } catch (e) {
       console.error(e);

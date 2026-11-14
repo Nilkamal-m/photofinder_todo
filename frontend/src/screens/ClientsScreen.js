@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import Feather from '@expo/vector-icons/Feather';
 import {
   View, Text, TouchableOpacity, FlatList, StyleSheet,
   Modal, TextInput, ActivityIndicator, ScrollView,
 } from 'react-native';
 import api from '../services/api';
+import { useFocusEffect } from '@react-navigation/native';
 import { confirmDialog, notify } from '../utils/dialog';
 
 import { COLORS, createStyles } from '../design/system';
@@ -38,9 +40,9 @@ export default function ClientsScreen({ navigation }) {
     }
   }, []);
 
-  useEffect(() => {
+  useFocusEffect(useCallback(() => {
     fetchClients();
-  }, [fetchClients]);
+  }, [fetchClients]));
 
   const openCreate = () => {
     setEditing(null);
@@ -87,6 +89,7 @@ export default function ClientsScreen({ navigation }) {
       return;
     }
 
+    if (form.eventDate && (!/^\d{4}-\d{2}-\d{2}$/.test(form.eventDate) || !Number.isFinite(Date.parse(form.eventDate)) || new Date(form.eventDate).toISOString().slice(0,10)!==form.eventDate)) {setFormError('Enter a valid event date in YYYY-MM-DD format');return;}
     setSaving(true);
     try {
       const payload = {
@@ -95,7 +98,7 @@ export default function ClientsScreen({ navigation }) {
         email: form.email.trim(),
         address: form.address.trim(),
         eventType: form.eventType.trim(),
-        eventDate: form.eventDate ? new Date(form.eventDate) : undefined,
+        eventDate: form.eventDate ? new Date(form.eventDate) : null,
         eventVenue: form.eventVenue.trim(),
         notes: form.notes.trim(),
       };
@@ -170,18 +173,18 @@ export default function ClientsScreen({ navigation }) {
       ) : null}
 
       <View style={styles.cardActions}>
-        <TouchableOpacity
+        <TouchableOpacity accessibilityRole="button"
           style={styles.billBtn}
           onPress={() => navigation.navigate('CreateBill', { preselectedClient: item })}
         >
           <Text style={styles.billBtnText}>Create Bill</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.editBtn} onPress={() => openEdit(item)}>
+        <TouchableOpacity accessibilityRole="button" style={styles.editBtn} onPress={() => openEdit(item)}>
           <Text style={styles.editBtnText}>Edit</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.delBtn} onPress={() => handleDelete(item)}>
+        <TouchableOpacity accessibilityRole="button" style={styles.delBtn} onPress={() => handleDelete(item)}>
           <Text style={styles.delBtnText}>Delete</Text>
         </TouchableOpacity>
       </View>
@@ -191,14 +194,14 @@ export default function ClientsScreen({ navigation }) {
   return (
     <View style={styles.container}>
       <View style={styles.topBar}>
-        <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-          <Text style={styles.backBtnText}>← Back</Text>
+        <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backBtn} onPress={() => navigation.goBack()}>
+          <Feather accessible={false} name="arrow-left" size={20} color={COLORS.primary} />
         </TouchableOpacity>
-        <View>
+        <View style={{flex:1,minWidth:140}}>
           <Text style={styles.heading}>Clients</Text>
           <Text style={styles.subheading}>Manage client records & event schedules</Text>
         </View>
-        <TouchableOpacity style={styles.addBtn} onPress={openCreate}>
+        <TouchableOpacity accessibilityRole="button" style={styles.addBtn} onPress={openCreate}>
           <Text style={styles.addBtnText}>+ Add Client</Text>
         </TouchableOpacity>
       </View>
@@ -218,7 +221,7 @@ export default function ClientsScreen({ navigation }) {
             <View style={styles.empty}>
               
               <Text style={styles.emptyText}>No clients added yet.</Text>
-              <TouchableOpacity style={styles.emptyAddBtn} onPress={openCreate}>
+              <TouchableOpacity accessibilityRole="button" style={styles.emptyAddBtn} onPress={openCreate}>
                 <Text style={styles.emptyAddBtnText}>+ Add First Client</Text>
               </TouchableOpacity>
             </View>
@@ -227,12 +230,12 @@ export default function ClientsScreen({ navigation }) {
       )}
 
       {/* Create / Edit Client Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
+      <Modal visible={modalVisible} animationType="fade" transparent onRequestClose={() => setModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>{editing ? 'Edit Client' : 'Add Client'}</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close dialog" onPress={() => setModalVisible(false)}>
                 <Text style={styles.closeIcon}>×</Text>
               </TouchableOpacity>
             </View>
@@ -245,14 +248,14 @@ export default function ClientsScreen({ navigation }) {
               ) : null}
 
               <Text style={styles.fieldLabel}>Client Full Name *</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Client Full Name *"
                 style={styles.input}
                                 value={form.name}
                 onChangeText={(v) => { setForm({ ...form, name: v }); setFormError(''); }}
               />
 
               <Text style={styles.fieldLabel}>Phone Number * (Must be accurate for bill sharing)</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Phone Number * (Must be accurate for bill sharing)"
                 style={styles.input}
                                 value={form.phone}
                 onChangeText={(v) => { setForm({ ...form, phone: v }); setFormError(''); }}
@@ -260,7 +263,7 @@ export default function ClientsScreen({ navigation }) {
               />
 
               <Text style={styles.fieldLabel}>Email Address</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Email Address"
                 style={styles.input}
                                 value={form.email}
                 onChangeText={(v) => setForm({ ...form, email: v })}
@@ -268,35 +271,35 @@ export default function ClientsScreen({ navigation }) {
               />
 
               <Text style={styles.fieldLabel}>Event Type</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Event Type"
                 style={styles.input}
                                 value={form.eventType}
                 onChangeText={(v) => setForm({ ...form, eventType: v })}
               />
 
               <Text style={styles.fieldLabel}>Event Date (YYYY-MM-DD)</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Event Date (YYYY-MM-DD)"
                 style={styles.input}
                                 value={form.eventDate}
                 onChangeText={(v) => setForm({ ...form, eventDate: v })}
               />
 
               <Text style={styles.fieldLabel}>Event Venue / Location</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Event Venue / Location"
                 style={styles.input}
                                 value={form.eventVenue}
                 onChangeText={(v) => setForm({ ...form, eventVenue: v })}
               />
 
               <Text style={styles.fieldLabel}>Client Address</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Client Address"
                 style={styles.input}
                                 value={form.address}
                 onChangeText={(v) => setForm({ ...form, address: v })}
               />
 
               <Text style={styles.fieldLabel}>Special Notes</Text>
-              <TextInput
+              <TextInput accessibilityLabel="Special Notes"
                 style={[styles.input, { height: 70 }]}
                                 value={form.notes}
                 onChangeText={(v) => setForm({ ...form, notes: v })}
@@ -304,10 +307,10 @@ export default function ClientsScreen({ navigation }) {
               />
 
               <View style={styles.modalBtns}>
-                <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <TouchableOpacity accessibilityRole="button" style={styles.cancelBtn} accessibilityLabel="Close dialog" onPress={() => setModalVisible(false)}>
                   <Text style={styles.cancelBtnText}>Cancel</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.saveBtn} onPress={save} disabled={saving}>
+                <TouchableOpacity accessibilityRole="button" style={styles.saveBtn} onPress={save} disabled={saving}>
                   {saving ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
@@ -378,12 +381,12 @@ const styles = createStyles({
   clientPhone: { fontSize: 13, color: COLORS.subtext, marginTop: 2 },
   clientSub: { fontSize: 12, color: COLORS.subtext, marginTop: 1 },
   eventBadge: {
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
   eventBadgeText: { color: COLORS.primary, fontSize: 11, fontWeight: 'bold' },
   eventDetailsBox: {
@@ -421,14 +424,14 @@ const styles = createStyles({
   billBtnText: { color: '#ffffff', fontWeight: 'bold', fontSize: 13 },
   editBtn: {
     flex: 1,
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     borderRadius: 8,
     paddingVertical: 9,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#d9e3fa',
+    borderColor: '#e2dfd6',
   },
-  editBtnText: { color: '#2459d3', fontWeight: '600', fontSize: 13 },
+  editBtnText: { color: '#4e5941', fontWeight: '600', fontSize: 13 },
   delBtn: {
     flex: 1,
     backgroundColor: '#fff5f5',

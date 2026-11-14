@@ -4,6 +4,7 @@ import {
   ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import { useAuth } from '../context/AuthContext';
+import Feather from '@expo/vector-icons/Feather';
 
 import { COLORS, createStyles } from '../design/system';
 
@@ -47,6 +48,9 @@ export default function LoginScreen({ navigation }) {
     <KeyboardAvoidingView style={styles.container} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
         <View style={styles.contentWrap}>
+          <TouchableOpacity accessibilityRole="button" accessibilityLabel="Back" style={styles.backButton} onPress={() => navigation.goBack()}>
+            <Feather accessible={false} name="arrow-left" size={20} color={COLORS.ink || COLORS.text} />
+          </TouchableOpacity>
           {/* Header */}
           <View style={styles.header}>
             <View style={styles.logoBadge}>
@@ -60,7 +64,7 @@ export default function LoginScreen({ navigation }) {
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{isRegister ? 'Create Account' : 'Sign in'}</Text>
             <Text style={styles.cardSub}>
-              {isRegister ? 'Sign up to manage studio packages & bills' : 'Manage your studio'}
+              {isRegister ? 'Keep your studio work together.' : 'Manage your studio'}
             </Text>
 
             {error ? (
@@ -72,7 +76,7 @@ export default function LoginScreen({ navigation }) {
             {isRegister && (
               <>
                 <Text style={styles.label}>Full Name</Text>
-                <TextInput
+                <TextInput accessibilityLabel="Full Name"
                   style={styles.input}
                                     value={name}
                   onChangeText={(v) => { setName(v); setError(''); }}
@@ -82,7 +86,7 @@ export default function LoginScreen({ navigation }) {
             )}
 
             <Text style={styles.label}>Phone Number</Text>
-            <TextInput
+            <TextInput accessibilityLabel="Phone Number"
               style={styles.input}
                             value={phone}
               onChangeText={(v) => { setPhone(v); setError(''); }}
@@ -90,7 +94,7 @@ export default function LoginScreen({ navigation }) {
             />
 
             <Text style={styles.label}>Password</Text>
-            <TextInput
+            <TextInput accessibilityLabel="Password"
               style={styles.input}
                             value={password}
               onChangeText={(v) => { setPassword(v); setError(''); }}
@@ -98,7 +102,7 @@ export default function LoginScreen({ navigation }) {
             />
 
             {isRegister && (
-              <TouchableOpacity
+              <TouchableOpacity accessibilityRole="button"
                 style={styles.checkRow}
                 onPress={() => setIsAdmin(!isAdmin)}
                 activeOpacity={0.8}
@@ -106,14 +110,14 @@ export default function LoginScreen({ navigation }) {
                 <View style={[styles.checkbox, isAdmin && styles.checkboxChecked]}>
                   {isAdmin && <Text style={styles.checkmark}>✓</Text>}
                 </View>
-                <Text style={styles.checkLabel}>Register as Administrator (View Profit Margins)</Text>
+                <Text style={styles.checkLabel}>Create an admin account</Text>
               </TouchableOpacity>
             )}
 
             {isRegister && isAdmin && (
               <>
-                <Text style={styles.label}>Admin Setup Key (Default: admin123setup)</Text>
-                <TextInput
+                <Text style={styles.label}>Admin setup key</Text>
+                <TextInput accessibilityLabel="Admin setup key"
                   style={styles.input}
                                     value={setupKey}
                   onChangeText={setSetupKey}
@@ -122,7 +126,7 @@ export default function LoginScreen({ navigation }) {
               </>
             )}
 
-            <TouchableOpacity style={styles.btn} onPress={handleSubmit} disabled={loading}>
+            <TouchableOpacity accessibilityRole="button" style={styles.btn} onPress={handleSubmit} disabled={loading}>
               {loading ? (
                 <ActivityIndicator color="#fff" />
               ) : (
@@ -130,7 +134,7 @@ export default function LoginScreen({ navigation }) {
               )}
             </TouchableOpacity>
 
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               onPress={() => {
                 setIsRegister(!isRegister);
                 setError('');
@@ -143,7 +147,7 @@ export default function LoginScreen({ navigation }) {
             </TouchableOpacity>
 
             {/* Public Bill Link Shortcut */}
-            <TouchableOpacity
+            <TouchableOpacity accessibilityRole="button"
               style={styles.sharedBillLink}
               onPress={() => navigation.navigate('SharedBill')}
             >
@@ -163,11 +167,12 @@ const styles = createStyles({
   scroll: { flexGrow: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
   contentWrap: { width: '100%', maxWidth: 440 },
   header: { alignItems: 'center', marginBottom: 28 },
+  backButton: { alignSelf: 'flex-start', padding: 8, marginBottom: 10 },
   logoBadge: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: '#edf2ff',
+    backgroundColor: '#eff0e8',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 12,

@@ -1,0 +1,14 @@
+import React,{useState,useCallback} from 'react';
+import {View,Text,ScrollView,TouchableOpacity,ActivityIndicator} from 'react-native';
+import {useFocusEffect} from '@react-navigation/native';
+import api from '../services/api';
+import {COLORS,createStyles} from '../design/system';
+import {notify} from '../utils/dialog';
+export default function EnquiriesScreen() {
+ const [items,setItems]=useState([]),[loading,setLoading]=useState(true),[saving,setSaving]=useState(null),[error,setError]=useState('');
+ const load=useCallback(async()=>{try{setItems((await api.get('/enquiries')).data);setError('');}catch{setError('Could not load enquiries.');}finally{setLoading(false);}},[]);
+ useFocusEffect(useCallback(()=>{load();},[load]));
+ const update=async(id,status)=>{setSaving(id);try{await api.put('/enquiries/'+id,{status});await load();}catch{notify('Unable to save','Please try again.');}finally{setSaving(null);}};
+ return <View style={styles.container}><View style={styles.topBar}><Text style={styles.heading}>Enquiries</Text><Text style={styles.subheading}>A new conversation starts here.</Text></View><ScrollView contentContainerStyle={styles.content}>{loading?<ActivityIndicator color={COLORS.primary}/>:error?<TouchableOpacity accessibilityRole="button" onPress={load}><Text style={{color:COLORS.error}}>{error} Retry</Text></TouchableOpacity>:!items.length?<Text style={styles.subheading}>New enquiries from the studio page will appear here.</Text>:items.map(item=><View style={styles.card} key={item._id}><Text style={styles.name}>{item.name}</Text><Text style={styles.details}>{item.phone}{item.email?' · '+item.email:''}</Text><Text style={styles.details}>{[item.eventType,item.eventDate].filter(Boolean).join(' · ')}</Text>{item.message?<Text style={styles.message}>{item.message}</Text>:null}<View style={styles.statuses}>{['new','contacted','closed'].map(status=><TouchableOpacity accessibilityRole="button" key={status} disabled={saving!==null} onPress={()=>update(item._id,status)} style={[styles.chip,item.status===status&&{backgroundColor:COLORS.primary}]}><Text style={{color:item.status===status?'#fff':COLORS.text,textTransform:'capitalize'}}>{status}</Text></TouchableOpacity>)}</View></View>)}</ScrollView></View>;
+}
+const styles=createStyles({container:{flex:1},topBar:{padding:24,borderBottomWidth:1,borderColor:COLORS.border},heading:{fontSize:30,color:COLORS.text},subheading:{color:COLORS.subtext,fontSize:14,lineHeight:22},content:{padding:24},card:{padding:24,marginBottom:16,borderWidth:1,borderColor:COLORS.border,borderRadius:8,backgroundColor:COLORS.surface},name:{fontSize:18,fontWeight:'600',color:COLORS.text},details:{fontSize:14,color:COLORS.subtext,marginTop:8},message:{fontSize:15,color:COLORS.text,lineHeight:24,marginTop:16},statuses:{flexDirection:'row',flexWrap:'wrap',gap:10,marginTop:20},chip:{paddingHorizontal:16,paddingVertical:12,borderWidth:1,borderColor:COLORS.border,borderRadius:6}});
